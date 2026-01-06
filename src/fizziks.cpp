@@ -1,13 +1,16 @@
 #include <iostream>
 #include <chrono>
+#include <vector>
 
 #include "SDL3/SDL.h"
 
-#include "Dense.h"
-#include "FizzWorld.h"
-#include "RigidBody.h"
-#include "RigidDef.h"
-#include "Shape.h"
+#include "Fizziks/Fizziks.h"
+#include "Fizziks/FizzWorld.h"
+#include "Fizziks/RigidBody.h"
+#include "Fizziks/RigidDef.h"
+#include "Fizziks/Shape.h"
+#include "Fizziks/Vec.h"
+#include "Fizziks/MathUtils.h"
 
 using namespace Fizziks;
 
@@ -28,7 +31,7 @@ val_t timescale = 1;
 void draw();
 void close();
 
-Vector2p transformToScreenSpace(Vector2p pos);
+Vec2 transformToScreenSpace(Vec2 pos);
 
 int main(int argc, char** argv) 
 {
@@ -36,28 +39,28 @@ int main(int argc, char** argv)
     gRenderer = SDL_CreateRenderer(gWindow, NULL);
 
     BodyDef def;
-    def.initPosition = Vector2p(25, 10);
+    def.initPosition = Vec2(25, 10);
     def.bodyType = BodyType::STATIC;
-    def.colliderDefs.push_back({ createCollider(createCircle(1), 1, 0), Vector2p::Zero()});
+    def.colliderDefs.push_back({ createCollider(createCircle(1), 1, 0), Vec2::Zero()});
     bodies.push_back(world.createBody(def));
 
-    def.initPosition.y() += 25; def.initVelocity.y() -= 2;
+    def.initPosition.y += 25; def.initVelocity.y -= 2;
     def.bodyType = BodyType::DYNAMIC;
     bodies.push_back(world.createBody(def));
 
-    def.initPosition.x() += 3;  def.initVelocity.x() -= 1;
+    def.initPosition.x += 3;  def.initVelocity.x -= 1;
     def.initAngularVelocity += 1;
     bodies.push_back(world.createBody(def));
 
     BodyDef def2;
-    def2.initPosition = Vector2p(20, 8);
+    def2.initPosition = Vec2(20, 8);
     def2.bodyType = BodyType::STATIC;
-    def2.colliderDefs.push_back({ createCollider(createRect(20, 1), 1, 0), Vector2p::Zero() });
+    def2.colliderDefs.push_back({ createCollider(createRect(20, 1), 1, 0), Vec2::Zero() });
     bodies.push_back(world.createBody(def2));
 
     BodyDef def3;
-    def3.initPosition = Vector2p(20, 40);
-    def3.colliderDefs.push_back({ createCollider(createRect(1, 2), 1, deg2rad(150)), Vector2p::Zero() });
+    def3.initPosition = Vec2(20, 40);
+    def3.colliderDefs.push_back({ createCollider(createRect(1, 2), 1, deg2rad(150)), Vec2::Zero() });
     bodies.push_back(world.createBody(def3));
 
     bool quit = false;
@@ -87,39 +90,39 @@ int main(int argc, char** argv)
 
 void draw()
 {
-    for(int i = 0; i < bodies.size(); ++i)
+    for(const auto& body : bodies)
     {
-        auto body = bodies[i];
+        SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
         if (body.bodyType() == BodyType::STATIC)
         {
-            SDL_SetRenderDrawColor(gRenderer, 160, 150, 30, SDL_ALPHA_OPAQUE);
+            color = { 160, 150, 30, SDL_ALPHA_OPAQUE };
         }
         else if (body.bodyType() == BodyType::DYNAMIC)
         {
-            SDL_SetRenderDrawColor(gRenderer, 100, 60, 150, SDL_ALPHA_OPAQUE);
+            color = { 100, 60, 150, SDL_ALPHA_OPAQUE };
         }
         else
         {
-            SDL_SetRenderDrawColor(gRenderer, 60, 150, 100, SDL_ALPHA_OPAQUE);
+            color = { 60, 150, 100, SDL_ALPHA_OPAQUE };
         }
+        SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
 
         const auto colliders = body.colliders();
-        Vector2p bodyPos = body.centroidPosition();
+        Vec2 bodyPos = body.centroidPosition();
         val_t rot = body.rotation();
         for (auto [collider, colliderPos] : colliders)
         {
             val_t angle = rot + collider.rotation;
-            Rotation2p rotation(angle);
-            Vector2p localPos = bodyPos + colliderPos;
-            Vector2p pos = transformToScreenSpace(localPos);
+            Vec2 localPos = bodyPos + colliderPos;
+            Vec2 pos = transformToScreenSpace(localPos);
             Shape shape = collider.shape;
             if (shape.type == ShapeType::CIRCLE)
             {
                 val_t r = std::get<Circle>(shape.data).radius;
-                int sr = (int)transformToScreenSpace(Vector2p{r, 0}).x();
+                int sr = (int)transformToScreenSpace(Vec2{r, 0}).x;
 
-                int x = (int)pos.x();
-                int y = SCREEN_HEIGHT - (int)pos.y();
+                int x = (int)pos.x;
+                int y = SCREEN_HEIGHT - (int)pos.y;
 
                 for (int i = -sr; i <= sr; ++i)
                 {
@@ -148,12 +151,12 @@ void draw()
 
                 for (const auto& vert : verts)
                 {
-                    auto v = rotation * vert;
-                    Vector2p screenV = transformToScreenSpace(localPos + v);
+                    auto v = vert.rotated(angle);
+                    Vec2 screenV = transformToScreenSpace(localPos + v);
 
                     SDL_Vertex sdlVert;
-                    sdlVert.position = SDL_FPoint{ screenV.x(), SCREEN_HEIGHT - screenV.y() };
-                    sdlVert.color = SDL_FColor{ 255, 255, 255, 255 };
+                    sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
+                    sdlVert.color = color;
                     sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
                     sdlVerts.push_back(sdlVert);
                 }
@@ -182,10 +185,10 @@ void draw()
     SDL_RenderPresent(gRenderer);
 }
 
-Vector2p transformToScreenSpace(Vector2p pos)
+Vec2 transformToScreenSpace(Vec2 pos)
 {
-    Vector2p scale = world.worldScale();
-    return { pos.x() * SCREEN_WIDTH / scale.x(), pos.y() * SCREEN_HEIGHT / scale.y() };
+    Vec2 scale = world.worldScale();
+    return { pos.x * SCREEN_WIDTH / scale.x, pos.y * SCREEN_HEIGHT / scale.y };
 }
 
 void close()

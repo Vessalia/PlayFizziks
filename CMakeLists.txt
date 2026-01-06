@@ -28,6 +28,9 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
 endif()
 
 
+
+#find_package(Fizziks CONFIG REQUIRED)
+
 # Let's nicely support folders in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 define_property(
@@ -48,3 +51,9 @@ add_subdirectory_with_folder(dependencies dependencies)
 add_executable(PlayFizziks src/fizziks.cpp)
 
 target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3)
+
+add_custom_command(TARGET PlayFizziks POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/dependencies/Fizziks/lib/Fizziks.dll"
+        $<TARGET_FILE_DIR:PlayFizziks>
+)
