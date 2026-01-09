@@ -20,13 +20,13 @@ const unsigned int SCREEN_HEIGHT = 920;
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
 
-static FizzWorld world = FizzWorld();
+static FizzWorld world;
 
 static std::vector<RigidBody> bodies;
 
 Uint32 lt = SDL_GetTicks();
 
-val_t timescale = 1;
+val_t timescale = 1.f;
 
 void draw();
 void close();
@@ -38,30 +38,24 @@ int main(int argc, char** argv)
     gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     gRenderer = SDL_CreateRenderer(gWindow, NULL);
 
-    BodyDef def;
-    def.initPosition = Vec2(25, 10);
-    def.bodyType = BodyType::STATIC;
-    def.colliderDefs.push_back({ createCollider(createCircle(1), 1, 0), Vec2::Zero()});
-    bodies.push_back(world.createBody(def));
+    world.Gravity = Vec2::Zero();
 
-    def.initPosition.y += 25; def.initVelocity.y -= 2;
-    def.bodyType = BodyType::DYNAMIC;
-    bodies.push_back(world.createBody(def));
+    BodyDef small;
+    small.colliderDefs.push_back({ createCollider(createRect(0.25, 0.25), 1, 0), Vec2::Zero() });
+    for (int i = 0; i < 10; ++i)
+    {
+        for (int j = 0; j < 10; ++j)
+        {
+            small.initPosition = { i / 2.f, j / 2.f };
+            bodies.push_back(world.createBody(small));
+        }
+    }
 
-    def.initPosition.x += 3;  def.initVelocity.x -= 1;
-    def.initAngularVelocity += 1;
-    bodies.push_back(world.createBody(def));
-
-    BodyDef def2;
-    def2.initPosition = Vec2(20, 8);
-    def2.bodyType = BodyType::STATIC;
-    def2.colliderDefs.push_back({ createCollider(createRect(20, 1), 1, 0), Vec2::Zero() });
-    bodies.push_back(world.createBody(def2));
-
-    BodyDef def3;
-    def3.initPosition = Vec2(20, 40);
-    def3.colliderDefs.push_back({ createCollider(createRect(1, 2), 1, deg2rad(150)), Vec2::Zero() });
-    bodies.push_back(world.createBody(def3));
+    BodyDef big;
+    big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0), Vec2::Zero() });
+    big.initPosition = { 20, 5 };
+    big.initVelocity = { -3, 0 };
+    bodies.push_back(world.createBody(big));
 
     bool quit = false;
     while (!quit)

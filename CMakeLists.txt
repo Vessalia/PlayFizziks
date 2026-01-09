@@ -47,13 +47,12 @@ function(add_subdirectory_with_folder _folder_name _folder)
 endfunction()
 
 add_subdirectory_with_folder(dependencies dependencies)
-
 add_executable(PlayFizziks src/fizziks.cpp)
 
 target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3)
 
 add_custom_command(TARGET PlayFizziks POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/dependencies/Fizziks/lib/Fizziks.dll"
+        $<TARGET_FILE:Fizziks>
         $<TARGET_FILE_DIR:PlayFizziks>
 )
