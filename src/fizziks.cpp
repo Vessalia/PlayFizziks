@@ -40,24 +40,26 @@ int main(int argc, char** argv)
 
     world.Gravity = Vec2::Zero();
 
-    BodyDef small;
-    small.colliderDefs.push_back({ createCollider(createRect(0.25, 0.25), 1, 0), Vec2::Zero() });
-    for (int i = 0; i < 10; ++i)
-    {
-        for (int j = 0; j < 10; ++j)
-        {
-            small.initPosition = { i / 2.f, j / 2.f };
-            bodies.push_back(world.createBody(small));
-        }
-    }
-
     BodyDef big;
     big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0), Vec2::Zero() });
     big.initPosition = { 20, 5 };
     big.initVelocity = { -3, 0 };
+    big.initAngularVelocity = 1;
     bodies.push_back(world.createBody(big));
 
+    BodyDef small;
+    small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0), Vec2::Zero() });
+    for (int i = 0; i < 10; ++i)
+    {
+        for (int j = 0; j < 21; ++j)
+        {
+            small.initPosition = { i * 1.f, j * 1.f };
+            bodies.push_back(world.createBody(small));
+        }
+    }
+
     bool quit = false;
+    bool pause = false;
     while (!quit)
     {
         SDL_Event e;
@@ -67,6 +69,41 @@ int main(int argc, char** argv)
             {
                 quit = true;
             }
+            else if (e.type == SDL_EVENT_KEY_DOWN)
+            {
+                switch (e.key.key)
+                {
+                case SDLK_ESCAPE:
+                    quit = true;
+                    break;
+
+                case SDLK_SPACE:
+                    pause = !pause;
+                    break;
+
+                case SDLK_G:
+                    world.Gravity = world.Gravity == Vec2::Zero() ? Vec2(0, -9.8) : Vec2::Zero();
+                    break;
+
+                case SDLK_PLUS:
+                    if (timescale >= 1) ++timescale;
+                    else
+                    {
+                        int x = static_cast<int>(std::round(1 / timescale));
+                        timescale = x > 2 ? 1.f / (x - 1) : 1;
+                    }
+                    break;
+
+                case SDLK_MINUS:
+                    if (timescale > 1) --timescale;
+                    else
+                    {
+                        int x = static_cast<int>(std::round(1 / timescale));
+                        timescale = 1.f / (x + 1);
+                    }
+                    break;
+                }
+            }
         }
 
         float dt = (SDL_GetTicks() - lt) / 1000.f;
@@ -75,7 +112,8 @@ int main(int argc, char** argv)
         SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(gRenderer);
 
-        world.tick(dt / timescale);
+        if (pause) dt = 0;
+        world.tick(dt * timescale);
         draw();
     }
 
