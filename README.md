@@ -2,7 +2,7 @@
 Demo of the [Fizziks](https://github.com/Vessalia/Fizziks) physics engine.
 
 ## Building
-- C++17 compatible compiler
+- C++20 compatible compiler
 - CMake 3.28 - 4.2
 - Only tested on Windows
   
