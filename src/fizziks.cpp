@@ -20,7 +20,7 @@ const unsigned int SCREEN_HEIGHT = 920;
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
 
-static FizzWorld world;
+static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
 static std::vector<RigidBody> bodies;
 
@@ -41,19 +41,19 @@ int main(int argc, char** argv)
     world.Gravity = Vec2::Zero();
 
     BodyDef big;
-    big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0), Vec2::Zero() });
+    big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0) });
     big.initPosition = { 20, 5 };
     big.initVelocity = { -3, 0 };
     big.initAngularVelocity = 1;
     bodies.push_back(world.createBody(big));
 
     BodyDef small;
-    small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0), Vec2::Zero() });
-    for (int i = 0; i < 10; ++i)
+    small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0) });
+    for (int i = 0; i < 100; ++i)
     {
-        for (int j = 0; j < 21; ++j)
+        for (int j = 0; j < 210; ++j)
         {
-            small.initPosition = { i * 1.f, j * 1.f };
+            small.initPosition = { i * 0.4f, j * 0.4f};
             bodies.push_back(world.createBody(small));
         }
     }
@@ -122,6 +122,18 @@ int main(int argc, char** argv)
 
 void draw()
 {
+    auto info = world.getBroadphaseDebugInfo();
+    SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
+    for (const auto& [aabb, p] : info)
+    {
+        SDL_FRect rect;
+        Vec2 pos = transformToScreenSpace(p - Vec2(aabb.hw, -aabb.hh));
+        Vec2 dim = transformToScreenSpace(2 * Vec2(aabb.hw, aabb.hh));
+        rect.x = pos.x; rect.y = SCREEN_HEIGHT - pos.y;
+        rect.w = dim.x; rect.h = dim.y;
+        //SDL_RenderRect(gRenderer, &rect);
+    }
+
     for(const auto& body : bodies)
     {
         SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
@@ -142,10 +154,10 @@ void draw()
         const auto colliders = body.colliders();
         Vec2 bodyPos = body.centroidPosition();
         val_t rot = body.rotation();
-        for (auto [collider, colliderPos] : colliders)
+        for (auto collider : colliders)
         {
             val_t angle = rot + collider.rotation;
-            Vec2 localPos = bodyPos + colliderPos;
+            Vec2 localPos = bodyPos + collider.pos;
             Vec2 pos = transformToScreenSpace(localPos);
             Shape shape = collider.shape;
             if (shape.type == ShapeType::CIRCLE)

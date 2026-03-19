@@ -49,6 +49,8 @@ endfunction()
 add_subdirectory_with_folder(dependencies dependencies)
 add_executable(PlayFizziks src/fizziks.cpp)
 
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PlayFizziks)
+
 target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3)
 
 add_custom_command(TARGET PlayFizziks POST_BUILD

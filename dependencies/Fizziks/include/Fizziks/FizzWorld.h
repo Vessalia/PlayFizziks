@@ -18,22 +18,29 @@ namespace Fizziks
 class FIZZIKS_API FizzWorld
 {
 public:
-    Vec2 Gravity = {0, -9.81};
+	Vec2 Gravity = {0, -9.81};
 
-    FizzWorld(size_t unitsX, size_t unitsY, int collisionIterations, val_t timeStep);
-    FizzWorld() : FizzWorld(20, 20, 5, 1 / 20.f) { }
-    ~FizzWorld();
+	enum class AccelStruct
+	{
+		SIMPLE, BVH
+	};
 
-    RigidBody createBody(const BodyDef& def);
-    void destroyBody(RigidBody& body);
+	FizzWorld(size_t unitsX, size_t unitsY, int collisionIterations, val_t timeStep, AccelStruct accel = AccelStruct::BVH);
+	FizzWorld() : FizzWorld(20, 20, 5, 1 / 20.f, AccelStruct::BVH) { }
+	~FizzWorld();
 
-    Vec2 worldScale() const;
+	RigidBody createBody(const BodyDef& def);
+	void destroyBody(RigidBody& body);
 
-    void tick(const val_t dt);
+	Vec2 worldScale() const;
+
+	void tick(val_t dt);
+
+	std::vector<std::pair<AABB, Vec2>> getBroadphaseDebugInfo() const;
 
 private:
-    friend class RigidBody;
+	friend class RigidBody;
 
-    internal::FizzWorldImpl* impl;
+	internal::FizzWorldImpl* impl;
 };
 }
