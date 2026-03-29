@@ -18,7 +18,7 @@ namespace Fizziks
 class FIZZIKS_API FizzWorld
 {
 public:
-	Vec2 Gravity = {0, -9.81};
+	Vec2 Gravity = {0, val_t(-9.81)};
 
 	enum class AccelStruct
 	{
@@ -36,7 +36,7 @@ public:
 
 	void tick(val_t dt);
 
-	std::vector<std::pair<AABB, Vec2>> getBroadphaseDebugInfo() const;
+	std::vector<AABB> getBroadphaseDebugInfo() const;
 
 private:
 	friend class RigidBody;

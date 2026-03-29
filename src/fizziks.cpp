@@ -11,6 +11,7 @@
 #include "Fizziks/Shape.h"
 #include "Fizziks/Vec.h"
 #include "Fizziks/MathUtils.h"
+#include "Fizziks/FizzLog.h"
 
 using namespace Fizziks;
 
@@ -35,208 +36,219 @@ Vec2 transformToScreenSpace(Vec2 pos);
 
 int main(int argc, char** argv) 
 {
-    gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
-    gRenderer = SDL_CreateRenderer(gWindow, NULL);
+	gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+	gRenderer = SDL_CreateRenderer(gWindow, NULL);
 
-    world.Gravity = Vec2::Zero();
+	world.Gravity = Vec2::Zero();
 
-    BodyDef big;
-    big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0) });
-    big.initPosition = { 20, 5 };
-    big.initVelocity = { -3, 0 };
-    big.initAngularVelocity = 1;
-    bodies.push_back(world.createBody(big));
+	Fizziks::SinkOptions options;
+	options.threadSafe = true;
+	addLogSink([](Fizziks::LogLevel level, std::string_view msg, std::string_view file, int line) 
+		{ 
+			std::cout << "level = " << toString(level) << ": msg = " << msg << ": file = " << file << ": line = " << line << std::endl;
+		}, options
+	);
 
-    BodyDef small;
-    small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0) });
-    for (int i = 0; i < 100; ++i)
-    {
-        for (int j = 0; j < 210; ++j)
-        {
-            small.initPosition = { i * 0.4f, j * 0.4f};
-            bodies.push_back(world.createBody(small));
-        }
-    }
+	BodyDef big;
+	big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0) });
+	big.initPosition = { 20, 5 };
+	big.initVelocity = { -3, 0 };
+	big.initAngularVelocity = 1;
+	bodies.push_back(world.createBody(big));
 
-    bool quit = false;
-    bool pause = false;
-    while (!quit)
-    {
-        SDL_Event e;
-        while (SDL_PollEvent(&e))
-        {
-            if (e.type == SDL_EVENT_QUIT)
-            {
-                quit = true;
-            }
-            else if (e.type == SDL_EVENT_KEY_DOWN)
-            {
-                switch (e.key.key)
-                {
-                case SDLK_ESCAPE:
-                    quit = true;
-                    break;
+	BodyDef small;
+	small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0) });
+	for (int i = 0; i < 100; ++i)
+	{
+		for (int j = 0; j < 210; ++j)
+		{
+			small.initPosition = { i * 0.4f, j * 0.4f};
+			bodies.push_back(world.createBody(small));
+		}
+	}
 
-                case SDLK_SPACE:
-                    pause = !pause;
-                    break;
+	bool quit = false;
+	bool pause = false;
+	while (!quit)
+	{
+		SDL_Event e;
+		while (SDL_PollEvent(&e))
+		{
+			if (e.type == SDL_EVENT_QUIT)
+			{
+				quit = true;
+			}
+			else if (e.type == SDL_EVENT_KEY_DOWN)
+			{
+				switch (e.key.key)
+				{
+				case SDLK_ESCAPE:
+					quit = true;
+					break;
 
-                case SDLK_G:
-                    world.Gravity = world.Gravity == Vec2::Zero() ? Vec2(0, -9.8) : Vec2::Zero();
-                    break;
+				case SDLK_SPACE:
+					pause = !pause;
+					break;
 
-                case SDLK_PLUS:
-                    if (timescale >= 1) ++timescale;
-                    else
-                    {
-                        int x = static_cast<int>(std::round(1 / timescale));
-                        timescale = x > 2 ? 1.f / (x - 1) : 1;
-                    }
-                    break;
+				case SDLK_G:
+					world.Gravity = world.Gravity == Vec2::Zero() ? Vec2(0, -9.8) : Vec2::Zero();
+					break;
 
-                case SDLK_MINUS:
-                    if (timescale > 1) --timescale;
-                    else
-                    {
-                        int x = static_cast<int>(std::round(1 / timescale));
-                        timescale = 1.f / (x + 1);
-                    }
-                    break;
-                }
-            }
-        }
+				case SDLK_PLUS:
+					if (timescale >= 1) ++timescale;
+					else
+					{
+						int x = static_cast<int>(std::round(1 / timescale));
+						timescale = x > 2 ? 1.f / (x - 1) : 1;
+					}
+					break;
 
-        float dt = (SDL_GetTicks() - lt) / 1000.f;
-        lt = SDL_GetTicks();
+				case SDLK_MINUS:
+					if (timescale > 1) --timescale;
+					else
+					{
+						int x = static_cast<int>(std::round(1 / timescale));
+						timescale = 1.f / (x + 1);
+					}
+					break;
+				}
+			}
+		}
 
-        SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-        SDL_RenderClear(gRenderer);
+		float dt = (SDL_GetTicks() - lt) / 1000.f;
+		lt = SDL_GetTicks();
 
-        if (pause) dt = 0;
-        world.tick(dt * timescale);
-        draw();
-    }
+		if (pause) dt = 0;
+		world.tick(dt * timescale);
+		draw();
+	}
 
-    close();
+	close();
 }
 
 void draw()
 {
-    auto info = world.getBroadphaseDebugInfo();
-    SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
-    for (const auto& [aabb, p] : info)
-    {
-        SDL_FRect rect;
-        Vec2 pos = transformToScreenSpace(p - Vec2(aabb.hw, -aabb.hh));
-        Vec2 dim = transformToScreenSpace(2 * Vec2(aabb.hw, aabb.hh));
-        rect.x = pos.x; rect.y = SCREEN_HEIGHT - pos.y;
-        rect.w = dim.x; rect.h = dim.y;
-        //SDL_RenderRect(gRenderer, &rect);
-    }
+	SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(gRenderer);
 
-    for(const auto& body : bodies)
-    {
-        SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
-        if (body.bodyType() == BodyType::STATIC)
-        {
-            color = { 160, 150, 30, SDL_ALPHA_OPAQUE };
-        }
-        else if (body.bodyType() == BodyType::DYNAMIC)
-        {
-            color = { 100, 60, 150, SDL_ALPHA_OPAQUE };
-        }
-        else
-        {
-            color = { 60, 150, 100, SDL_ALPHA_OPAQUE };
-        }
-        SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
+	auto info = world.getBroadphaseDebugInfo();
+	SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
+	for (const auto& aabb : info)
+	{
+		SDL_FRect rect;
+		Vec2 dim = transformToScreenSpace(aabb.max - aabb.min);
+		Vec2 topLeft = transformToScreenSpace(aabb.min);
+		Vec2 topRight = transformToScreenSpace(aabb.max);
 
-        const auto colliders = body.colliders();
-        Vec2 bodyPos = body.centroidPosition();
-        val_t rot = body.rotation();
-        for (auto collider : colliders)
-        {
-            val_t angle = rot + collider.rotation;
-            Vec2 localPos = bodyPos + collider.pos;
-            Vec2 pos = transformToScreenSpace(localPos);
-            Shape shape = collider.shape;
-            if (shape.type == ShapeType::CIRCLE)
-            {
-                val_t r = std::get<Circle>(shape.data).radius;
-                int sr = (int)transformToScreenSpace(Vec2{r, 0}).x;
+		rect.x = topLeft.x; rect.y = SCREEN_HEIGHT - topRight.y;
+		rect.w = dim.x; rect.h = dim.y;
+		SDL_RenderRect(gRenderer, &rect);
+	}
 
-                int x = (int)pos.x;
-                int y = SCREEN_HEIGHT - (int)pos.y;
+	for(const auto& body : bodies)
+	{
+		SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
+		if (body.bodyType() == BodyType::STATIC)
+		{
+			color = { 160, 150, 30, SDL_ALPHA_OPAQUE };
+		}
+		else if (body.bodyType() == BodyType::DYNAMIC)
+		{
+			color = { 100, 60, 150, SDL_ALPHA_OPAQUE };
+		}
+		else
+		{
+			color = { 60, 150, 100, SDL_ALPHA_OPAQUE };
+		}
+		SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
 
-                for (int i = -sr; i <= sr; ++i)
-                {
-                    int dx = (int)std::sqrt(sr * sr - i * i);
-                    SDL_RenderLine(gRenderer, x - dx, y + i, x + dx, y + i);
-                }
+		const auto colliders = body.colliders();
+		Vec2 bodyPos = body.centroidPosition();
+		val_t rot = body.rotation();
+		for (auto collider : colliders)
+		{
+			val_t angle = rot + collider.rotation;
+			Vec2 localPos = bodyPos + collider.pos;
+			Vec2 pos = transformToScreenSpace(localPos);
+			Shape shape = collider.shape;
+			if (shape.type == ShapeType::CIRCLE)
+			{
+				val_t r = std::get<Circle>(shape.data).radius;
+				int sr = (int)transformToScreenSpace(Vec2{r, 0}).x;
 
-                float dx = std::cos(-angle);
-                float dy = std::sin(-angle);
+				int x = (int)pos.x;
+				int y = SCREEN_HEIGHT - (int)pos.y;
 
-                // Endpoints of the diameter
-                int x1 = (int)(x - dx * sr);
-                int y1 = (int)(y - dy * sr);
-                int x2 = (int)(x + dx * sr);
-                int y2 = (int)(y + dy * sr);
+				for (int i = -sr; i <= sr; ++i)
+				{
+					int dx = (int)std::sqrt(sr * sr - i * i);
+					SDL_RenderLine(gRenderer, x - dx, y + i, x + dx, y + i);
+				}
 
-                SDL_SetRenderDrawColor(gRenderer, 60, 150, 100, SDL_ALPHA_OPAQUE);
-                SDL_RenderLine(gRenderer, x1, y1, x2, y2);
-            }
-            else if (shape.type == ShapeType::POLYGON)
-            {
-                const auto& verts = std::get<Polygon>(shape.data).vertices;
+				float dx = std::cos(-angle);
+				float dy = std::sin(-angle);
 
-                std::vector<SDL_Vertex> sdlVerts;
-                sdlVerts.reserve(verts.size());
+				// Endpoints of the diameter
+				int x1 = (int)(x - dx * sr);
+				int y1 = (int)(y - dy * sr);
+				int x2 = (int)(x + dx * sr);
+				int y2 = (int)(y + dy * sr);
 
-                for (const auto& vert : verts)
-                {
-                    auto v = vert.rotated(angle);
-                    Vec2 screenV = transformToScreenSpace(localPos + v);
+				SDL_SetRenderDrawColor(gRenderer, 60, 150, 100, SDL_ALPHA_OPAQUE);
+				SDL_RenderLine(gRenderer, x1, y1, x2, y2);
+			}
+			else if (shape.type == ShapeType::POLYGON)
+			{
+				const auto& verts = std::get<Polygon>(shape.data).vertices;
 
-                    SDL_Vertex sdlVert;
-                    sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
-                    sdlVert.color = color;
-                    sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
-                    sdlVerts.push_back(sdlVert);
-                }
+				std::vector<SDL_Vertex> sdlVerts;
+				sdlVerts.reserve(verts.size());
 
-                // Build triangle fan indices
-                std::vector<int> indices;
-                indices.reserve((verts.size() - 2) * 3);
+				for (const auto& vert : verts)
+				{
+					auto v = vert.rotated(angle);
+					Vec2 screenV = transformToScreenSpace(localPos + v);
 
-                for (size_t i = 1; i + 1 < sdlVerts.size(); ++i)
-                {
-                    indices.push_back(0);
-                    indices.push_back(static_cast<int>(i));
-                    indices.push_back(static_cast<int>(i + 1));
-                }
+					SDL_Vertex sdlVert;
+					sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
+					sdlVert.color = color;
+					sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
+					sdlVerts.push_back(sdlVert);
+				}
 
-                // Single draw call
-                SDL_RenderGeometry(
-                    gRenderer,
-                    nullptr,
-                    sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-                    indices.data(), static_cast<int>(indices.size())
-                );
-            }
-        }
-    }
-    SDL_RenderPresent(gRenderer);
+				// Build triangle fan indices
+				std::vector<int> indices;
+				indices.reserve((verts.size() - 2) * 3);
+
+				for (size_t i = 1; i + 1 < sdlVerts.size(); ++i)
+				{
+					indices.push_back(0);
+					indices.push_back(static_cast<int>(i));
+					indices.push_back(static_cast<int>(i + 1));
+				}
+
+				// Single draw call
+				SDL_RenderGeometry(
+					gRenderer,
+					nullptr,
+					sdlVerts.data(), static_cast<int>(sdlVerts.size()),
+					indices.data(), static_cast<int>(indices.size())
+				);
+			}
+		}
+	}
+
+	SDL_RenderPresent(gRenderer);
 }
 
 Vec2 transformToScreenSpace(Vec2 pos)
 {
-    Vec2 scale = world.worldScale();
-    return { pos.x * SCREEN_WIDTH / scale.x, pos.y * SCREEN_HEIGHT / scale.y };
+	Vec2 scale = world.worldScale();
+	return { pos.x * SCREEN_WIDTH / scale.x, pos.y * SCREEN_HEIGHT / scale.y };
 }
 
 void close()
 {
-    SDL_DestroyRenderer(gRenderer);
-    SDL_DestroyWindow(gWindow);
+	SDL_DestroyRenderer(gRenderer);
+	SDL_DestroyWindow(gWindow);
 }
