@@ -11,7 +11,8 @@
 #include "Fizziks/Shape.h"
 #include "Fizziks/Vec.h"
 #include "Fizziks/MathUtils.h"
-#include "Fizziks/FizzLog.h"
+#include "Fizziks/Log.h"
+#include "Fizziks/BodyDefBuilder.h"
 
 using namespace Fizziks;
 
@@ -34,7 +35,7 @@ void close();
 
 Vec2 transformToScreenSpace(Vec2 pos);
 
-int main(int argc, char** argv) 
+int main(int argc, char** argv)
 {
 	gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
 	gRenderer = SDL_CreateRenderer(gWindow, NULL);
@@ -43,21 +44,21 @@ int main(int argc, char** argv)
 
 	Fizziks::SinkOptions options;
 	options.threadSafe = true;
-	addLogSink([](Fizziks::LogLevel level, std::string_view msg, std::string_view file, int line) 
+	addLogSink([](Fizziks::LogLevel level, std::string_view msg, std::string_view file, int line)
 		{ 
 			std::cout << "level = " << toString(level) << ": msg = " << msg << ": file = " << file << ": line = " << line << std::endl;
 		}, options
 	);
 
-	BodyDef big;
-	big.colliderDefs.push_back({ createCollider(createCircle(1.4), 10, 0) });
-	big.initPosition = { 20, 5 };
-	big.initVelocity = { -3, 0 };
-	big.initAngularVelocity = 1;
+	BodyDef big = BodyDefBuilder().setInitPosition({ 20, 5 })
+						 		  .setInitVelocity({ -3, 0 })
+								  .setInitAngularVelocity(1)
+								  .setColliderDefs({ createCollider(createCircle(1.4), 10) })
+								  .build();
 	bodies.push_back(world.createBody(big));
 
 	BodyDef small;
-	small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1, 0) });
+	small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1) });
 	for (int i = 0; i < 100; ++i)
 	{
 		for (int j = 0; j < 210; ++j)
