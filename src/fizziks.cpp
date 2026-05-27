@@ -33,6 +33,12 @@ val_t timescale = 1.f;
 void draw();
 void close();
 
+void renderCircle(const Circle& circle, const Vec2& pos, val_t angle);
+void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
+void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
+void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
+void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, val_t angle, const SDL_FColor& color);
+
 Vec2 transformToScreenSpace(Vec2 pos);
 
 int main(int argc, char** argv)
@@ -53,12 +59,12 @@ int main(int argc, char** argv)
 	BodyDef big = BodyDefBuilder().setInitPosition({ 20, 5 })
 						 		  .setInitVelocity({ -3, 0 })
 								  .setInitAngularVelocity(1)
-								  .setColliderDefs({ createCollider(createCircle(1.4), 10) })
+								  .setColliderDefs({ createColliderDef(createCircle(1.4), 10) })
 								  .build();
 	bodies.push_back(world.createBody(big));
 
 	BodyDef small;
-	small.colliderDefs.push_back({ createCollider(createRect(0.35, 0.35), 1) });
+	small.colliderDefs.push_back({ createColliderDef(createRect(0.35, 0.35), 1) });
 	for (int i = 0; i < 100; ++i)
 	{
 		for (int j = 0; j < 210; ++j)
@@ -172,74 +178,241 @@ void draw()
 			Vec2 localPos = bodyPos + collider.pos;
 			Vec2 pos = transformToScreenSpace(localPos);
 			Shape shape = collider.shape;
-			if (shape.type == ShapeType::CIRCLE)
+			if (std::holds_alternative<Circle>(shape))
 			{
-				val_t r = std::get<Circle>(shape.data).radius;
-				int sr = (int)transformToScreenSpace(Vec2{r, 0}).x;
-
-				int x = (int)pos.x;
-				int y = SCREEN_HEIGHT - (int)pos.y;
-
-				for (int i = -sr; i <= sr; ++i)
-				{
-					int dx = (int)std::sqrt(sr * sr - i * i);
-					SDL_RenderLine(gRenderer, x - dx, y + i, x + dx, y + i);
-				}
-
-				float dx = std::cos(-angle);
-				float dy = std::sin(-angle);
-
-				// Endpoints of the diameter
-				int x1 = (int)(x - dx * sr);
-				int y1 = (int)(y - dy * sr);
-				int x2 = (int)(x + dx * sr);
-				int y2 = (int)(y + dy * sr);
-
-				SDL_SetRenderDrawColor(gRenderer, 60, 150, 100, SDL_ALPHA_OPAQUE);
-				SDL_RenderLine(gRenderer, x1, y1, x2, y2);
+				renderCircle(std::get<Circle>(shape), pos, angle);
 			}
-			else if (shape.type == ShapeType::POLYGON)
+			else if (std::holds_alternative<Ellipse>(shape))
 			{
-				const auto& verts = std::get<Polygon>(shape.data).vertices;
-
-				std::vector<SDL_Vertex> sdlVerts;
-				sdlVerts.reserve(verts.size());
-
-				for (const auto& vert : verts)
-				{
-					auto v = vert.rotated(angle);
-					Vec2 screenV = transformToScreenSpace(localPos + v);
-
-					SDL_Vertex sdlVert;
-					sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
-					sdlVert.color = color;
-					sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
-					sdlVerts.push_back(sdlVert);
-				}
-
-				// Build triangle fan indices
-				std::vector<int> indices;
-				indices.reserve((verts.size() - 2) * 3);
-
-				for (size_t i = 1; i + 1 < sdlVerts.size(); ++i)
-				{
-					indices.push_back(0);
-					indices.push_back(static_cast<int>(i));
-					indices.push_back(static_cast<int>(i + 1));
-				}
-
-				// Single draw call
-				SDL_RenderGeometry(
-					gRenderer,
-					nullptr,
-					sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-					indices.data(), static_cast<int>(indices.size())
-				);
+				renderEllipse(std::get<Ellipse>(shape), pos, localPos, angle, color);
+			}
+			else if (std::holds_alternative<Rect>(shape))
+			{
+				renderRect(std::get<Rect>(shape), pos, localPos, angle, color);
+			}
+			else if (std::holds_alternative<Polygon>(shape))
+			{
+				renderPolygon(std::get<Polygon>(shape), pos, localPos, angle, color);
+			}
+			else if (std::holds_alternative<Capsule>(shape))
+			{
+				renderCapsule(std::get<Capsule>(shape), pos, localPos, angle, color);
 			}
 		}
 	}
 
 	SDL_RenderPresent(gRenderer);
+}
+
+void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
+{
+	val_t r = circle.radius;
+	int sr = (int)transformToScreenSpace(Vec2{ r, 0 }).x;
+
+	int x = (int)pos.x;
+	int y = SCREEN_HEIGHT - (int)pos.y;
+
+	for (int i = -sr; i <= sr; ++i)
+	{
+		int dx = (int)std::sqrt(sr * sr - i * i);
+		SDL_RenderLine(gRenderer, x - dx, y + i, x + dx, y + i);
+	}
+
+	float dx = std::cos(-angle);
+	float dy = std::sin(-angle);
+
+	// Endpoints of the diameter
+	int x1 = (int)(x - dx * sr);
+	int y1 = (int)(y - dy * sr);
+	int x2 = (int)(x + dx * sr);
+	int y2 = (int)(y + dy * sr);
+
+	SDL_SetRenderDrawColor(gRenderer, 60, 150, 100, SDL_ALPHA_OPAQUE);
+	SDL_RenderLine(gRenderer, x1, y1, x2, y2);
+}
+
+void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+{
+	const int segments = 64;
+
+	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.reserve(segments + 1);
+
+	SDL_Vertex center;
+	center.position = SDL_FPoint{ pos.x, SCREEN_HEIGHT - pos.y };
+	center.color = color;
+	center.tex_coord = SDL_FPoint{ 0, 0 };
+	sdlVerts.push_back(center);
+
+	for (int i = 0; i < segments; ++i)
+	{
+		float theta = (TWO_PI * i) / segments;
+		Vec2 local = Vec2{ ellipse.rx * std::cos(theta), ellipse.ry * std::sin(theta) }.rotated(angle);
+		Vec2 screen = transformToScreenSpace(centeroidPos + local);
+
+		SDL_Vertex v;
+		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.color = color;
+		v.tex_coord = SDL_FPoint{ 0, 0 };
+		sdlVerts.push_back(v);
+	}
+
+	std::vector<int> indices;
+	indices.reserve(segments * 3);
+
+	for (int i = 1; i <= segments; ++i)
+	{
+		indices.push_back(0);
+		indices.push_back(i);
+		indices.push_back(i % segments + 1);
+	}
+
+	SDL_RenderGeometry(
+		gRenderer,
+		nullptr,
+		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
+		indices.data(), static_cast<int>(indices.size())
+	);
+}
+
+void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+{
+	// Four corners in local space (centered on origin)
+	float hw = rect.width * 0.5f;
+	float hh = rect.height * 0.5f;
+
+	Vec2 corners[4] = {
+		Vec2{ -hw, -hh },
+		Vec2{  hw, -hh },
+		Vec2{  hw,  hh },
+		Vec2{ -hw,  hh },
+	};
+
+	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.reserve(4);
+
+	for (const auto& corner : corners)
+	{
+		Vec2 screen = transformToScreenSpace(centeroidPos + corner.rotated(angle));
+
+		SDL_Vertex v;
+		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.color = color;
+		v.tex_coord = SDL_FPoint{ 0, 0 };
+		sdlVerts.push_back(v);
+	}
+
+	// Two triangles: [0,1,2] and [0,2,3]
+	std::vector<int> indices = { 0, 1, 2, 0, 2, 3 };
+
+	SDL_RenderGeometry(
+		gRenderer,
+		nullptr,
+		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
+		indices.data(), static_cast<int>(indices.size())
+	);
+}
+
+void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+{
+	const auto& verts = polygon.vertices;
+
+	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.reserve(verts.size());
+
+	for (const auto& vert : verts)
+	{
+		auto v = vert.rotated(angle);
+		Vec2 screenV = transformToScreenSpace(centeroidPos + v);
+
+		SDL_Vertex sdlVert;
+		sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
+		sdlVert.color = color;
+		sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
+		sdlVerts.push_back(sdlVert);
+	}
+
+	// Build triangle fan indices
+	std::vector<int> indices;
+	indices.reserve((verts.size() - 2) * 3);
+
+	for (size_t i = 1; i + 1 < sdlVerts.size(); ++i)
+	{
+		indices.push_back(0);
+		indices.push_back(static_cast<int>(i));
+		indices.push_back(static_cast<int>(i + 1));
+	}
+
+	// Single draw call
+	SDL_RenderGeometry(
+		gRenderer,
+		nullptr,
+		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
+		indices.data(), static_cast<int>(indices.size())
+	);
+}
+
+void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, val_t angle, const SDL_FColor& color)
+{
+	const int hemisphereSegments = 16; // per hemisphere
+	const float r = capsule.capHeight; // for now we'll just assume the cap perfectly covers the top/bottom
+	const float halfLen = capsule.body.height * 0.5f;
+
+	// Build verts: top hemisphere → bottom hemisphere
+	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.reserve(hemisphereSegments * 2);
+
+	// Top hemisphere (center offset +halfLen along local Y)
+	for (int i = 0; i < hemisphereSegments; ++i)
+	{
+		float theta = (PI * i) / (hemisphereSegments - 1); // 0 → PI (left to right)
+		Vec2 local = Vec2{ r * std::cos(theta), halfLen + r * std::sin(theta) }.rotated(angle);
+		Vec2 screen = transformToScreenSpace(centroidPos + local);
+
+		SDL_Vertex v;
+		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.color = color;
+		v.tex_coord = SDL_FPoint{ 0, 0 };
+		sdlVerts.push_back(v);
+	}
+
+	// Bottom hemisphere (center offset -halfLen along local Y)
+	for (int i = 0; i < hemisphereSegments; ++i)
+	{
+		float theta = (PI * i) / (hemisphereSegments - 1); // PI → 0 (right to left)
+		Vec2 local = Vec2{ -r * std::cos(theta), -halfLen - r * std::sin(theta) }.rotated(angle);
+		Vec2 screen = transformToScreenSpace(centroidPos + local);
+
+		SDL_Vertex v;
+		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.color = color;
+		v.tex_coord = SDL_FPoint{ 0, 0 };
+		sdlVerts.push_back(v);
+	}
+
+	// Triangle fan from vertex 0 around the whole perimeter
+	std::vector<int> indices;
+	const int total = static_cast<int>(sdlVerts.size());
+	indices.reserve((total - 2) * 3);
+
+	for (int i = 1; i + 1 < total; ++i)
+	{
+		indices.push_back(0);
+		indices.push_back(i);
+		indices.push_back(i + 1);
+	}
+
+	// Close the shape: last vert back to first
+	indices.push_back(0);
+	indices.push_back(total - 1);
+	indices.push_back(0); // degenerate close — or add a final stitch if needed
+
+	SDL_RenderGeometry(
+		gRenderer,
+		nullptr,
+		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
+		indices.data(), static_cast<int>(indices.size())
+	);
 }
 
 Vec2 transformToScreenSpace(Vec2 pos)
