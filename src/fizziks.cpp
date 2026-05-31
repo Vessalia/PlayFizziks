@@ -1,6 +1,7 @@
 #include <iostream>
 #include <chrono>
 #include <vector>
+#include <numeric>
 
 #include "SDL3/SDL.h"
 
@@ -59,7 +60,7 @@ int main(int argc, char** argv)
 	BodyDef big = BodyDefBuilder().setInitPosition({ 20, 5 })
 						 		  .setInitVelocity({ -3, 0 })
 								  .setInitAngularVelocity(1)
-								  .setColliderDefs({ createColliderDef(createCircle(1.4), 10) })
+								  .setColliderDefs({ createColliderDef(createPolygon({Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(2, 1), Vec2(2, 2), Vec2(0, 2)}), 10)})
 								  .build();
 	bodies.push_back(world.createBody(big));
 
@@ -317,14 +318,26 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 {
 	const auto& verts = polygon.vertices;
 
+	// Compute centroid of the raw vertices so we can render centroid-relative,
+	// matching how the physics internally represents the shape
+	Vec2 centroid = Vec2::Zero();
+	val_t area = 0;
+	for (size_t i = 0; i < verts.size(); ++i)
+	{
+		const Vec2& v0 = verts[i];
+		const Vec2& v1 = verts[(i + 1) % verts.size()];
+		val_t cross = v0.cross(v1);
+		centroid += (v0 + v1) * cross;
+		area += cross;
+	}
+	if (area != 0) centroid /= (3 * area);
+
 	std::vector<SDL_Vertex> sdlVerts;
 	sdlVerts.reserve(verts.size());
 
 	for (const auto& vert : verts)
 	{
-		auto v = vert.rotated(angle);
-		Vec2 screenV = transformToScreenSpace(centeroidPos + v);
-
+		Vec2 screenV = transformToScreenSpace(centeroidPos + (vert - centroid).rotated(angle));
 		SDL_Vertex sdlVert;
 		sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
 		sdlVert.color = color;
@@ -332,24 +345,62 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 		sdlVerts.push_back(sdlVert);
 	}
 
-	// Build triangle fan indices
+	auto pointInTriangle = [&](int p, int a, int b, int c) {
+		const auto& P = verts[p]; const auto& A = verts[a]; const auto& B = verts[b]; const auto& C = verts[c];
+		return (B - A).cross(P - A) >= 0.f &&
+			(C - B).cross(P - B) >= 0.f &&
+			(A - C).cross(P - C) >= 0.f;
+		};
+
+	std::vector<int> remaining(verts.size());
+	std::iota(remaining.begin(), remaining.end(), 0);
+
 	std::vector<int> indices;
 	indices.reserve((verts.size() - 2) * 3);
 
-	for (size_t i = 1; i + 1 < sdlVerts.size(); ++i)
+	while (remaining.size() > 3)
 	{
-		indices.push_back(0);
-		indices.push_back(static_cast<int>(i));
-		indices.push_back(static_cast<int>(i + 1));
+		bool clipped = false;
+		for (size_t i = 0; i < remaining.size(); ++i)
+		{
+			int prev = remaining[(i + remaining.size() - 1) % remaining.size()];
+			int curr = remaining[i];
+			int next = remaining[(i + 1) % remaining.size()];
+
+			const auto& A = verts[prev]; const auto& B = verts[curr]; const auto& C = verts[next];
+			if ((A - B).cross(C - B) >= 0) continue; // reflex or collinear
+
+			bool isEar = true;
+			for (size_t j = 0; j < remaining.size(); ++j)
+			{
+				int idx = remaining[j];
+				if (idx == prev || idx == curr || idx == next) continue;
+				if (pointInTriangle(idx, prev, curr, next)) { isEar = false; break; }
+			}
+
+			if (isEar)
+			{
+				indices.push_back(prev);
+				indices.push_back(curr);
+				indices.push_back(next);
+				remaining.erase(remaining.begin() + i);
+				clipped = true;
+				break;
+			}
+		}
+		if (!clipped) break;
 	}
 
-	// Single draw call
-	SDL_RenderGeometry(
-		gRenderer,
-		nullptr,
+	if (remaining.size() == 3)
+	{
+		indices.push_back(remaining[0]);
+		indices.push_back(remaining[1]);
+		indices.push_back(remaining[2]);
+	}
+
+	SDL_RenderGeometry(gRenderer, nullptr,
 		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-		indices.data(), static_cast<int>(indices.size())
-	);
+		indices.data(), static_cast<int>(indices.size()));
 }
 
 void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, val_t angle, const SDL_FColor& color)
