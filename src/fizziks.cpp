@@ -17,13 +17,13 @@
 
 using namespace Fizziks;
 
-const unsigned int SCREEN_WIDTH = 920;
-const unsigned int SCREEN_HEIGHT = 920;
+const unsigned int SCREEN_WIDTH = 1440;
+const unsigned int SCREEN_HEIGHT = 1440;
 
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
 
-static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
+static FizzWorld world = FizzWorld(20, 20, 5, 1 / 100.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
 static std::vector<RigidBody> bodies;
 
@@ -42,38 +42,78 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 
 Vec2 transformToScreenSpace(Vec2 pos);
 
+void createStage()
+{
+	BodyDef left = BodyDefBuilder().setInitPosition({ 0, 0 })
+		.setBodyType(BodyType::STATIC)
+		.setColliderDefs({ createColliderDef(createRect(1, 20)) })
+		.setRestitution(0.0f)
+		.build();
+
+	BodyDef right = BodyDefBuilder().setInitPosition({ 20, 0 })
+		.setBodyType(BodyType::STATIC)
+		.setColliderDefs({ createColliderDef(createRect(1, 20)) })
+		.setRestitution(0.0f)
+		.build();
+
+	BodyDef bottom = BodyDefBuilder().setInitPosition({ 10, 0.5 })
+		.setBodyType(BodyType::STATIC)
+		.setColliderDefs({ createColliderDef(createRect(20, 1)) })
+		.setRestitution(0.1f)
+		.build();
+
+	bodies.push_back(world.createBody(left));
+	bodies.push_back(world.createBody(right));
+	bodies.push_back(world.createBody(bottom));
+}
+
+void createBalls()
+{
+	Vec2 xRange = { 0, 10 };
+	Vec2 yRange = { 0, 10 };
+
+	for (int x = xRange.x; x < xRange.y; ++x)
+	{
+		for (int y = yRange.x; y < yRange.y; ++y)
+		{
+			float normalizedX = (float)(x - xRange.x) / (xRange.y - xRange.x);
+			float normalizedY = (float)(y - yRange.x) / (yRange.y - yRange.x);
+
+			float posX = 7.5 + normalizedX * 5;
+			float posY = 7.5 + normalizedY * 5;
+
+			auto ballBuilder = BodyDefBuilder()
+				.setInitPosition({ posX, posY })
+				.setBodyType(BodyType::DYNAMIC)
+				.setGravityScale(1.0f)
+				.setRestitution(0.3f)
+				.setColliderDefs({ createColliderDef(createCircle(.2f), 0.1f) });
+
+			bodies.push_back(world.createBody(ballBuilder.build()));
+		}
+	}
+
+}
+
 int main(int argc, char** argv)
 {
 	gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+
+	SDL_SetHint(SDL_HINT_RENDER_LINE_METHOD, "2");
 	gRenderer = SDL_CreateRenderer(gWindow, NULL);
 
-	world.Gravity = Vec2::Zero();
+	world.Gravity = { 0, -10 };
 
 	Fizziks::SinkOptions options;
 	options.threadSafe = true;
 	addLogSink([](Fizziks::LogLevel level, std::string_view msg, std::string_view file, int line)
-		{ 
+		{
 			std::cout << "level = " << toString(level) << ": msg = " << msg << ": file = " << file << ": line = " << line << std::endl;
 		}, options
 	);
 
-	BodyDef big = BodyDefBuilder().setInitPosition({ 20, 5 })
-						 		  .setInitVelocity({ -3, 0 })
-								  .setInitAngularVelocity(1)
-								  .setColliderDefs({ createColliderDef(createPolygon({Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(2, 1), Vec2(2, 2), Vec2(0, 2)}), 10)})
-								  .build();
-	bodies.push_back(world.createBody(big));
-
-	BodyDef small;
-	small.colliderDefs.push_back({ createColliderDef(createRect(0.35, 0.35), 1) });
-	for (int i = 0; i < 100; ++i)
-	{
-		for (int j = 0; j < 210; ++j)
-		{
-			small.initPosition = { i * 0.4f, j * 0.4f};
-			bodies.push_back(world.createBody(small));
-		}
-	}
+	createStage();
+	createBalls();
 
 	bool quit = false;
 	bool pause = false;
@@ -153,7 +193,7 @@ void draw()
 		SDL_RenderRect(gRenderer, &rect);
 	}
 
-	for(const auto& body : bodies)
+	for (const auto& body : bodies)
 	{
 		SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
 		if (body.bodyType() == BodyType::STATIC)
@@ -173,12 +213,12 @@ void draw()
 		const auto colliders = body.colliders();
 		Vec2 bodyPos = body.centroidPosition();
 		val_t rot = body.rotation();
-		for (auto collider : colliders)
+		for (const auto& collider : colliders)
 		{
 			val_t angle = rot + collider.rotation;
 			Vec2 localPos = bodyPos + collider.pos;
 			Vec2 pos = transformToScreenSpace(localPos);
-			Shape shape = collider.shape;
+			const Shape& shape = collider.shape;
 			if (std::holds_alternative<Circle>(shape))
 			{
 				renderCircle(std::get<Circle>(shape), pos, angle);
@@ -232,11 +272,12 @@ void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
 	SDL_RenderLine(gRenderer, x1, y1, x2, y2);
 }
 
+static std::vector<SDL_Vertex> sdlVerts;
+std::vector<int> indices;
 void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
 {
 	const int segments = 64;
-
-	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.clear();
 	sdlVerts.reserve(segments + 1);
 
 	SDL_Vertex center;
@@ -258,7 +299,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 		sdlVerts.push_back(v);
 	}
 
-	std::vector<int> indices;
+	indices.clear();
 	indices.reserve(segments * 3);
 
 	for (int i = 1; i <= segments; ++i)
@@ -289,29 +330,19 @@ void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val
 		Vec2{ -hw,  hh },
 	};
 
-	std::vector<SDL_Vertex> sdlVerts;
-	sdlVerts.reserve(4);
+	SDL_Vertex vertices[4];
 
-	for (const auto& corner : corners)
+	for (int i = 0; i < 4; ++i)
 	{
-		Vec2 screen = transformToScreenSpace(centeroidPos + corner.rotated(angle));
-
-		SDL_Vertex v;
-		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
-		v.color = color;
-		v.tex_coord = SDL_FPoint{ 0, 0 };
-		sdlVerts.push_back(v);
+		Vec2 screen = transformToScreenSpace(centeroidPos + corners[i].rotated(angle));
+		vertices[i].position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		vertices[i].color = color;
+		vertices[i].tex_coord = SDL_FPoint{ 0, 0 };
 	}
 
-	// Two triangles: [0,1,2] and [0,2,3]
-	std::vector<int> indices = { 0, 1, 2, 0, 2, 3 };
+	int indices[] = { 0, 1, 2, 0, 2, 3 };
 
-	SDL_RenderGeometry(
-		gRenderer,
-		nullptr,
-		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-		indices.data(), static_cast<int>(indices.size())
-	);
+	SDL_RenderGeometry(gRenderer, nullptr, vertices, 4, indices, 6);
 }
 
 void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
@@ -332,7 +363,7 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 	}
 	if (area != 0) centroid /= (3 * area);
 
-	std::vector<SDL_Vertex> sdlVerts;
+	sdlVerts.clear();
 	sdlVerts.reserve(verts.size());
 
 	for (const auto& vert : verts)
@@ -355,7 +386,7 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 	std::vector<int> remaining(verts.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
 
-	std::vector<int> indices;
+	indices.clear();
 	indices.reserve((verts.size() - 2) * 3);
 
 	while (remaining.size() > 3)
