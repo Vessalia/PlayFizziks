@@ -47,11 +47,21 @@ function(add_subdirectory_with_folder _folder_name _folder)
 endfunction()
 
 add_subdirectory_with_folder(dependencies dependencies)
-add_executable(PlayFizziks src/fizziks.cpp)
+
+
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
+file(GLOB_RECURSE INCLUDES CONFIGURE_DEPENDS include/*.h)
+
+add_executable(PlayFizziks ${SOURCES} ${INCLUDES})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PlayFizziks)
 
-target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3)
+target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3 ImGui)
+
+target_include_directories(PlayFizziks PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/dependencies
+)
 
 add_custom_command(TARGET PlayFizziks POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

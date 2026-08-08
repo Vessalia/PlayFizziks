@@ -3,6 +3,12 @@
 #include <vector>
 #include <numeric>
 
+#include "EditorUI.h"
+
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_sdl3.h"
+#include "imgui/backends/imgui_impl_sdlrenderer3.h"
+
 #include "SDL3/SDL.h"
 
 #include "Fizziks/Fizziks.h"
@@ -23,7 +29,9 @@ const unsigned int SCREEN_HEIGHT = 1440;
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
 
-static FizzWorld world = FizzWorld(20, 20, 5, 1 / 100.f, Fizziks::FizzWorld::AccelStruct::BVH);
+static std::unique_ptr<EditorUI> editor;
+
+static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
 static std::vector<RigidBody> bodies;
 
@@ -92,17 +100,72 @@ void createBalls()
 			bodies.push_back(world.createBody(ballBuilder.build()));
 		}
 	}
+}
 
+bool initSDL(float& main_scale)
+{
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
+	{
+		printf("Error: SDL_Init(): %s\n", SDL_GetError());
+		return false;
+	}
+
+	main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+	SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+	gWindow = SDL_CreateWindow("PlayFizziks", (int)(SCREEN_WIDTH * main_scale), (int)(SCREEN_HEIGHT * main_scale), window_flags);
+	if (gWindow == nullptr)
+	{
+		printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
+		return false;
+	}
+
+	SDL_SetHint(SDL_HINT_RENDER_LINE_METHOD, "2");
+	gRenderer = SDL_CreateRenderer(gWindow, NULL);
+	if (gRenderer == nullptr)
+	{
+		SDL_Log("Error: SDL_CreateRenderer(): %s\n", SDL_GetError());
+		return false;
+	}
+
+	SDL_SetWindowPosition(gWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	SDL_ShowWindow(gWindow);
+
+	return true;
+}
+
+bool initImGui(float main_scale)
+{
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+
+	ImGui::StyleColorsDark();
+
+	// Setup scaling
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.ScaleAllSizes(main_scale);
+	style.FontScaleDpi = main_scale;
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplSDL3_InitForSDLRenderer(gWindow, gRenderer);
+	ImGui_ImplSDLRenderer3_Init(gRenderer);
+
+	editor = std::make_unique<EditorUI>();
+
+	
+
+	return true;
 }
 
 int main(int argc, char** argv)
 {
-	gWindow = SDL_CreateWindow("Fizziks Test", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
-
-	SDL_SetHint(SDL_HINT_RENDER_LINE_METHOD, "2");
-	gRenderer = SDL_CreateRenderer(gWindow, NULL);
-
-	world.Gravity = { 0, -10 };
+	float main_scale = -1;
+	initSDL(main_scale);
+	initImGui(main_scale);
 
 	Fizziks::SinkOptions options;
 	options.threadSafe = true;
@@ -122,6 +185,7 @@ int main(int argc, char** argv)
 		SDL_Event e;
 		while (SDL_PollEvent(&e))
 		{
+			ImGui_ImplSDL3_ProcessEvent(&e);
 			if (e.type == SDL_EVENT_QUIT)
 			{
 				quit = true;
@@ -162,6 +226,12 @@ int main(int argc, char** argv)
 				}
 			}
 		}
+
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+
+		editor->OnImguiRender();
 
 		float dt = (SDL_GetTicks() - lt) / 1000.f;
 		lt = SDL_GetTicks();
@@ -505,6 +575,11 @@ Vec2 transformToScreenSpace(Vec2 pos)
 
 void close()
 {
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
+
 	SDL_DestroyRenderer(gRenderer);
 	SDL_DestroyWindow(gWindow);
+	SDL_Quit();
 }
