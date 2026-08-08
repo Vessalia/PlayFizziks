@@ -239,6 +239,8 @@ int main(int argc, char** argv)
 		if (pause) dt = 0;
 		world.tick(dt * timescale);
 		draw();
+		
+		ImGui::EndFrame();
 	}
 
 	close();
