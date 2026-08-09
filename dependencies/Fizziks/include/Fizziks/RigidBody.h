@@ -4,6 +4,7 @@
 #include <Fizziks/Vec.h>
 
 #include <memory>
+#include <functional>
 
 namespace Fizziks::internal
 {
@@ -20,8 +21,8 @@ namespace Fizziks
 class FIZZIKS_API RigidBody
 {
 public:
-	RigidBody(const RigidBody&) = delete;
-	RigidBody& operator=(const RigidBody&) = delete;
+	RigidBody(const RigidBody& other);
+	RigidBody& operator=(const RigidBody& other);
 
 	RigidBody(RigidBody&&) noexcept = default;
 	RigidBody& operator=(RigidBody&&) noexcept = default;
@@ -68,11 +69,30 @@ public:
 	void collisionOnStay();
 	void collisionOnExit();
 
+	bool operator==(const RigidBody& other) const
+	{
+		return impl == other.impl;
+	}
+
+
 private:
 	friend class FizzWorld;
+	friend struct std::hash<RigidBody>;
 
 	RigidBody() : impl(nullptr, internal::RigidBodyImplDeleter{}) { }
 
 	std::unique_ptr<internal::RigidBodyImpl, internal::RigidBodyImplDeleter> impl;
+};
+}
+
+namespace std
+{
+template <>
+struct hash<Fizziks::RigidBody>
+{
+	size_t operator()(const Fizziks::RigidBody r) const
+	{
+		return std::hash<Fizziks::internal::RigidBodyImpl*>{}(r.impl.get());
+	}
 };
 }

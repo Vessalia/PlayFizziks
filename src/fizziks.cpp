@@ -43,6 +43,7 @@ val_t timescale = 1.f;
 void draw();
 void close();
 
+void renderBody(const RigidBody& rb);
 void renderCircle(const Circle& circle, const Vec2& pos, val_t angle);
 void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
 void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
@@ -271,12 +272,7 @@ void draw()
 		SDL_RenderRect(gRenderer, &rect);
 	}
 
-	for (const auto& body : bodies)
-	{
-		renderBody(body);
-	}
-
-	for (const auto& body : world.getBodies())
+	for (const auto& body : world.getActiveBodies())
 	{
 		renderBody(body);
 	}

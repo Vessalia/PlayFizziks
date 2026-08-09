@@ -35,11 +35,11 @@ public:
 	FizzWorld() : FizzWorld(20, 20, 5, 1 / 20.f, AccelStruct::BVH) { }
 	~FizzWorld() = default;
 
-	FizzWorld(FizzWorld&&) noexcept = default;
-	FizzWorld& operator=(FizzWorld&&) noexcept = default;
-
 	FizzWorld(const FizzWorld&) = delete;
 	FizzWorld& operator=(const FizzWorld&) = delete;
+
+	FizzWorld(FizzWorld&&) noexcept = default;
+	FizzWorld& operator=(FizzWorld&&) noexcept = default;
 
 	RigidBody createBody(const BodyDef& def);
 	void destroyBody(RigidBody& body);
@@ -48,11 +48,15 @@ public:
 
 	void tick(val_t dt);
 
+	std::vector<RigidBody> getActiveBodies() const;
 	std::vector<AABB> getBroadphaseDebugInfo() const;
 
 private:
 	friend class RigidBody;
 
 	std::unique_ptr<internal::FizzWorldImpl, internal::FizzWorldImplDeleter> impl;
+
+	std::unordered_map<RigidBody, size_t> bodyToIndex;
+	std::vector<RigidBody> activeBodies;
 };
 }
