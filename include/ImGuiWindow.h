@@ -9,9 +9,9 @@ private:
 	bool mShowWindow = false;
 	std::string mName;
 
-	Fizziks::Vec2 mSize{};
+	Fizziks::Vec2 mSize;
 
-	int mWindowFlags{};
+	int mWindowFlags;
 
 protected:
 

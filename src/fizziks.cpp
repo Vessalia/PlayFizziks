@@ -4,6 +4,7 @@
 #include <numeric>
 
 #include "EditorUI.h"
+#include <SpawnerWindow.h>
 
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_sdl3.h"
@@ -23,8 +24,8 @@
 
 using namespace Fizziks;
 
-const unsigned int SCREEN_WIDTH = 1440;
-const unsigned int SCREEN_HEIGHT = 1440;
+const unsigned int SCREEN_WIDTH = 720;
+const unsigned int SCREEN_HEIGHT = 720;
 
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
@@ -156,7 +157,8 @@ bool initImGui(float main_scale)
 
 	editor = std::make_unique<EditorUI>();
 
-	
+	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(&world);
+	editor->AddEditorWindow(std::move(spawner));
 
 	return true;
 }
@@ -187,6 +189,10 @@ int main(int argc, char** argv)
 		{
 			ImGui_ImplSDL3_ProcessEvent(&e);
 			if (e.type == SDL_EVENT_QUIT)
+			{
+				quit = true;
+			}
+			else if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && e.window.windowID == SDL_GetWindowID(gWindow))
 			{
 				quit = true;
 			}
@@ -227,20 +233,12 @@ int main(int argc, char** argv)
 			}
 		}
 
-		ImGui_ImplSDLRenderer3_NewFrame();
-		ImGui_ImplSDL3_NewFrame();
-		ImGui::NewFrame();
-
-		editor->OnImguiRender();
-
 		float dt = (SDL_GetTicks() - lt) / 1000.f;
 		lt = SDL_GetTicks();
 
 		if (pause) dt = 0;
 		world.tick(dt * timescale);
 		draw();
-		
-		ImGui::EndFrame();
 	}
 
 	close();
@@ -248,6 +246,14 @@ int main(int argc, char** argv)
 
 void draw()
 {
+	ImGui_ImplSDLRenderer3_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
+	ImGui::NewFrame();
+
+	editor->OnImguiRender();
+
+	ImGui::Render();
+
 	SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(gRenderer);
 
@@ -267,54 +273,65 @@ void draw()
 
 	for (const auto& body : bodies)
 	{
-		SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
-		if (body.bodyType() == BodyType::STATIC)
-		{
-			color = { 160, 150, 30, SDL_ALPHA_OPAQUE };
-		}
-		else if (body.bodyType() == BodyType::DYNAMIC)
-		{
-			color = { 100, 60, 150, SDL_ALPHA_OPAQUE };
-		}
-		else
-		{
-			color = { 60, 150, 100, SDL_ALPHA_OPAQUE };
-		}
-		SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
-
-		const auto colliders = body.colliders();
-		Vec2 bodyPos = body.centroidPosition();
-		val_t rot = body.rotation();
-		for (const auto& collider : colliders)
-		{
-			val_t angle = rot + collider.rotation;
-			Vec2 localPos = bodyPos + collider.pos;
-			Vec2 pos = transformToScreenSpace(localPos);
-			const Shape& shape = collider.shape;
-			if (std::holds_alternative<Circle>(shape))
-			{
-				renderCircle(std::get<Circle>(shape), pos, angle);
-			}
-			else if (std::holds_alternative<Ellipse>(shape))
-			{
-				renderEllipse(std::get<Ellipse>(shape), pos, localPos, angle, color);
-			}
-			else if (std::holds_alternative<Rect>(shape))
-			{
-				renderRect(std::get<Rect>(shape), pos, localPos, angle, color);
-			}
-			else if (std::holds_alternative<Polygon>(shape))
-			{
-				renderPolygon(std::get<Polygon>(shape), pos, localPos, angle, color);
-			}
-			else if (std::holds_alternative<Capsule>(shape))
-			{
-				renderCapsule(std::get<Capsule>(shape), pos, localPos, angle, color);
-			}
-		}
+		renderBody(body);
 	}
 
+	for (const auto& body : world.getBodies())
+	{
+		renderBody(body);
+	}
+
+	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), gRenderer);
 	SDL_RenderPresent(gRenderer);
+}
+
+void renderBody(const RigidBody& body)
+{
+	SDL_FColor color = SDL_FColor{ 255, 255, 255, SDL_ALPHA_OPAQUE };
+	if (body.bodyType() == BodyType::STATIC)
+	{
+		color = { 160, 150, 30, SDL_ALPHA_OPAQUE };
+	}
+	else if (body.bodyType() == BodyType::DYNAMIC)
+	{
+		color = { 100, 60, 150, SDL_ALPHA_OPAQUE };
+	}
+	else
+	{
+		color = { 60, 150, 100, SDL_ALPHA_OPAQUE };
+	}
+	SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
+
+	const auto colliders = body.colliders();
+	Vec2 bodyPos = body.centroidPosition();
+	val_t rot = body.rotation();
+	for (const auto& collider : colliders)
+	{
+		val_t angle = rot + collider.rotation;
+		Vec2 localPos = bodyPos + collider.pos;
+		Vec2 pos = transformToScreenSpace(localPos);
+		const Shape& shape = collider.shape;
+		if (std::holds_alternative<Circle>(shape))
+		{
+			renderCircle(std::get<Circle>(shape), pos, angle);
+		}
+		else if (std::holds_alternative<Ellipse>(shape))
+		{
+			renderEllipse(std::get<Ellipse>(shape), pos, localPos, angle, color);
+		}
+		else if (std::holds_alternative<Rect>(shape))
+		{
+			renderRect(std::get<Rect>(shape), pos, localPos, angle, color);
+		}
+		else if (std::holds_alternative<Polygon>(shape))
+		{
+			renderPolygon(std::get<Polygon>(shape), pos, localPos, angle, color);
+		}
+		else if (std::holds_alternative<Capsule>(shape))
+		{
+			renderCapsule(std::get<Capsule>(shape), pos, localPos, angle, color);
+		}
+	}
 }
 
 void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
