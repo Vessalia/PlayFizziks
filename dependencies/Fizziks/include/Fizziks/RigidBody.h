@@ -69,30 +69,19 @@ public:
 	void collisionOnStay();
 	void collisionOnExit();
 
-	bool operator==(const RigidBody& other) const
-	{
-		return impl == other.impl;
-	}
-
+	bool operator==(const RigidBody& other) const;
 
 private:
 	friend class FizzWorld;
-	friend struct std::hash<RigidBody>;
+	friend struct RigidBodyHash;
 
 	RigidBody() : impl(nullptr, internal::RigidBodyImplDeleter{}) { }
 
 	std::unique_ptr<internal::RigidBodyImpl, internal::RigidBodyImplDeleter> impl;
 };
-}
 
-namespace std
+struct RigidBodyHash
 {
-template <>
-struct hash<Fizziks::RigidBody>
-{
-	size_t operator()(const Fizziks::RigidBody r) const
-	{
-		return std::hash<Fizziks::internal::RigidBodyImpl*>{}(r.impl.get());
-	}
+	size_t operator()(const RigidBody& r) const;
 };
 }
