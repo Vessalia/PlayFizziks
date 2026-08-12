@@ -1,6 +1,7 @@
 #include "EditorUI.h"
 
 #include <imgui.h>
+#include <nfd.h>
 
 static void InitImGuiStyles();
 
@@ -13,7 +14,7 @@ void EditorUI::OnImguiRender()
 		firstFrame = false;
 	}
 
-	//_DrawDockSpace();
+	_DrawDockSpace();
 	_DrawMainMenuBar();
 
 	for (const auto& window : mWindows)
@@ -22,7 +23,7 @@ void EditorUI::OnImguiRender()
 	}
 
 	//// begin is called in _DrawDockSpace()
-	//ImGui::End();
+	ImGui::End();
 }
 
 void EditorUI::_DrawDockSpace()
@@ -61,6 +62,30 @@ void EditorUI::_DrawMainMenuBar()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
+			if (ImGui::MenuItem("Open..."))
+			{
+				nfdu8char_t* outPath;
+				nfdopendialogu8args_t args = {0};
+				args.filterList = &openFilters[0];
+				args.filterCount = openFilters.size();
+				nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+				if (result == NFD_OKAY)
+				{
+					savePath = outPath;
+					NFD_FreePathU8(outPath);
+				}
+			}
+
+			if (ImGui::MenuItem("Save as..."))
+			{
+				nfdsavedialogu8args_t args = {0};
+			}
+
+			if (ImGui::MenuItem("Save"))
+			{
+
+			}
+
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Window"))

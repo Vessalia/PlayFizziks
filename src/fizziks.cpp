@@ -3,8 +3,11 @@
 #include <vector>
 #include <numeric>
 
+#include "nfd.h"
+
 #include "EditorUI.h"
-#include <SpawnerWindow.h>
+#include "SpawnerWindow.h"
+#include "EnvironmentWindow.h"
 
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_sdl3.h"
@@ -24,21 +27,25 @@
 
 using namespace Fizziks;
 
-const unsigned int SCREEN_WIDTH = 720;
+const unsigned int SCREEN_WIDTH  = 720;
 const unsigned int SCREEN_HEIGHT = 720;
+float mainScale = 1;
+
+#define WIDTH (SCREEN_WIDTH * mainScale)
+#define HEIGHT (SCREEN_HEIGHT * mainScale)
 
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
 
 static std::unique_ptr<EditorUI> editor;
+static EnvironmentConfig enviroConfig;
+static SpawnerConfig spawnerConfig;
 
 static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
 static std::vector<RigidBody> bodies;
 
 Uint32 lt = SDL_GetTicks();
-
-val_t timescale = 1.f;
 
 void draw();
 void close();
@@ -104,7 +111,7 @@ void createBalls()
 	}
 }
 
-bool initSDL(float& main_scale)
+bool initSDL()
 {
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
 	{
@@ -112,9 +119,9 @@ bool initSDL(float& main_scale)
 		return false;
 	}
 
-	main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+	mainScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 	SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-	gWindow = SDL_CreateWindow("PlayFizziks", (int)(SCREEN_WIDTH * main_scale), (int)(SCREEN_HEIGHT * main_scale), window_flags);
+	gWindow = SDL_CreateWindow("PlayFizziks", (int)(WIDTH), (int)(HEIGHT), window_flags);
 	if (gWindow == nullptr)
 	{
 		printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
@@ -135,7 +142,7 @@ bool initSDL(float& main_scale)
 	return true;
 }
 
-bool initImGui(float main_scale)
+bool initImGui()
 {
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -149,26 +156,40 @@ bool initImGui(float main_scale)
 
 	// Setup scaling
 	ImGuiStyle& style = ImGui::GetStyle();
-	style.ScaleAllSizes(main_scale);
-	style.FontScaleDpi = main_scale;
+	style.ScaleAllSizes(mainScale);
+	style.FontScaleDpi = mainScale;
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplSDL3_InitForSDLRenderer(gWindow, gRenderer);
 	ImGui_ImplSDLRenderer3_Init(gRenderer);
 
+	if (NFD_Init() != NFD_OKAY)
+	{
+		printf("Error: NFD_Init(): %s\n", NFD_GetError());
+		return false;
+	}
+
 	editor = std::make_unique<EditorUI>();
 
-	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(&world);
+	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(&world, spawnerConfig);
 	editor->AddEditorWindow(std::move(spawner));
+
+	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(&world, enviroConfig);
+	editor->AddEditorWindow(std::move(enviro));
 
 	return true;
 }
 
 int main(int argc, char** argv)
 {
-	float main_scale = -1;
-	initSDL(main_scale);
-	initImGui(main_scale);
+	bool sdl_error = initSDL();
+	bool imgui_error = initImGui();
+
+	if(sdl_error || imgui_error)
+	{
+		printf("Program failure, exiting...\n");
+		return 1;
+	}
 
 	Fizziks::SinkOptions options;
 	options.threadSafe = true;
@@ -182,7 +203,6 @@ int main(int argc, char** argv)
 	createBalls();
 
 	bool quit = false;
-	bool pause = false;
 	while (!quit)
 	{
 		SDL_Event e;
@@ -201,35 +221,9 @@ int main(int argc, char** argv)
 			{
 				switch (e.key.key)
 				{
-				case SDLK_ESCAPE:
-					quit = true;
-					break;
-
-				case SDLK_SPACE:
-					pause = !pause;
-					break;
-
-				case SDLK_G:
-					world.Gravity = world.Gravity == Vec2::Zero() ? Vec2(0, -9.8) : Vec2::Zero();
-					break;
-
-				case SDLK_PLUS:
-					if (timescale >= 1) ++timescale;
-					else
-					{
-						int x = static_cast<int>(std::round(1 / timescale));
-						timescale = x > 2 ? 1.f / (x - 1) : 1;
-					}
-					break;
-
-				case SDLK_MINUS:
-					if (timescale > 1) --timescale;
-					else
-					{
-						int x = static_cast<int>(std::round(1 / timescale));
-						timescale = 1.f / (x + 1);
-					}
-					break;
+					case SDLK_ESCAPE:
+						quit = true;
+						break;
 				}
 			}
 		}
@@ -237,8 +231,7 @@ int main(int argc, char** argv)
 		float dt = (SDL_GetTicks() - lt) / 1000.f;
 		lt = SDL_GetTicks();
 
-		if (pause) dt = 0;
-		world.tick(dt * timescale);
+		world.tick(dt);
 		draw();
 	}
 
@@ -258,18 +251,21 @@ void draw()
 	SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(gRenderer);
 
-	auto info = world.getBroadphaseDebugInfo();
-	SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
-	for (const auto& aabb : info)
+	if (enviroConfig.drawDebug)
 	{
-		SDL_FRect rect;
-		Vec2 dim = transformToScreenSpace(aabb.max - aabb.min);
-		Vec2 topLeft = transformToScreenSpace(aabb.min);
-		Vec2 topRight = transformToScreenSpace(aabb.max);
+		auto info = world.getBroadphaseDebugInfo();
+		SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
+		for (const auto& aabb : info)
+		{
+			SDL_FRect rect;
+			Vec2 dim = transformToScreenSpace(aabb.max - aabb.min);
+			Vec2 topLeft = transformToScreenSpace(aabb.min);
+			Vec2 topRight = transformToScreenSpace(aabb.max);
 
-		rect.x = topLeft.x; rect.y = SCREEN_HEIGHT - topRight.y;
-		rect.w = dim.x; rect.h = dim.y;
-		SDL_RenderRect(gRenderer, &rect);
+			rect.x = topLeft.x; rect.y = HEIGHT - topRight.y;
+			rect.w = dim.x; rect.h = dim.y;
+			SDL_RenderRect(gRenderer, &rect);
+		}
 	}
 
 	for (const auto& body : world.getActiveBodies())
@@ -336,7 +332,7 @@ void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
 	int sr = (int)transformToScreenSpace(Vec2{ r, 0 }).x;
 
 	int x = (int)pos.x;
-	int y = SCREEN_HEIGHT - (int)pos.y;
+	int y = HEIGHT - (int)pos.y;
 
 	for (int i = -sr; i <= sr; ++i)
 	{
@@ -366,7 +362,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 	sdlVerts.reserve(segments + 1);
 
 	SDL_Vertex center;
-	center.position = SDL_FPoint{ pos.x, SCREEN_HEIGHT - pos.y };
+	center.position = SDL_FPoint{ pos.x, HEIGHT - pos.y };
 	center.color = color;
 	center.tex_coord = SDL_FPoint{ 0, 0 };
 	sdlVerts.push_back(center);
@@ -378,7 +374,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 		Vec2 screen = transformToScreenSpace(centeroidPos + local);
 
 		SDL_Vertex v;
-		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
 		v.color = color;
 		v.tex_coord = SDL_FPoint{ 0, 0 };
 		sdlVerts.push_back(v);
@@ -420,7 +416,7 @@ void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val
 	for (int i = 0; i < 4; ++i)
 	{
 		Vec2 screen = transformToScreenSpace(centeroidPos + corners[i].rotated(angle));
-		vertices[i].position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		vertices[i].position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
 		vertices[i].color = color;
 		vertices[i].tex_coord = SDL_FPoint{ 0, 0 };
 	}
@@ -455,7 +451,7 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 	{
 		Vec2 screenV = transformToScreenSpace(centeroidPos + (vert - centroid).rotated(angle));
 		SDL_Vertex sdlVert;
-		sdlVert.position = SDL_FPoint{ screenV.x, SCREEN_HEIGHT - screenV.y };
+		sdlVert.position = SDL_FPoint{ screenV.x, HEIGHT - screenV.y };
 		sdlVert.color = color;
 		sdlVert.tex_coord = SDL_FPoint{ 0, 0 };
 		sdlVerts.push_back(sdlVert);
@@ -537,7 +533,7 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 		Vec2 screen = transformToScreenSpace(centroidPos + local);
 
 		SDL_Vertex v;
-		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
 		v.color = color;
 		v.tex_coord = SDL_FPoint{ 0, 0 };
 		sdlVerts.push_back(v);
@@ -551,7 +547,7 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 		Vec2 screen = transformToScreenSpace(centroidPos + local);
 
 		SDL_Vertex v;
-		v.position = SDL_FPoint{ screen.x, SCREEN_HEIGHT - screen.y };
+		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
 		v.color = color;
 		v.tex_coord = SDL_FPoint{ 0, 0 };
 		sdlVerts.push_back(v);
@@ -585,11 +581,13 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 Vec2 transformToScreenSpace(Vec2 pos)
 {
 	Vec2 scale = world.worldScale();
-	return { pos.x * SCREEN_WIDTH / scale.x, pos.y * SCREEN_HEIGHT / scale.y };
+	return { pos.x * WIDTH / scale.x, pos.y * HEIGHT / scale.y };
 }
 
 void close()
 {
+	NFD_Quit();
+
 	ImGui_ImplSDLRenderer3_Shutdown();
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();

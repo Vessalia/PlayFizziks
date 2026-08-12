@@ -7,6 +7,7 @@ set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
 
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(Fizziks EXCLUDE_FROM_ALL)
+add_subdirectory(nativefiledialog-extended EXCLUDE_FROM_ALL)
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 
