@@ -2,32 +2,53 @@
 
 #include <vector>
 #include <memory>
+#include <variant>
+#include <deque>
+#include <string.h>
+#include <nfd.h>
 
 #include "ImGuiWindow.h"
 
-enum class RequestType
+struct FileFilter
 {
-	OPEN, SAVE
+	std::string name;
+	std::string extensions;
 };
 
-struct Request
+struct EditorConfig
 {
-	RequestType type;
+	std::vector<FileFilter> openFilters;
+	std::vector<FileFilter> saveFilters;
 };
+
+struct OpenRequest { std::string path; };
+struct SaveAsRequest { std::string path; };
+struct SaveRequest { std::string path; };
+
+using Request = std::variant<OpenRequest, SaveAsRequest, SaveRequest>;
 
 class EditorUI
 {
 private:
 	std::vector<std::unique_ptr<ImGuiWindow>> mWindows;
-	nfdu8char_t* savePath;
+
+	std::string savePath;
 
 	std::deque<Request> requests;
 
 	void _DrawDockSpace();
 	void _DrawMainMenuBar();
+
+	void Open();
+	void SaveAs();
+	void Save();
+
+	template<typename T>
+	void _PushRequest(T&& request) { requests.push_back(std::forward<T>(request)); }
 public:
-	std::vector<nfdu8filteritem_t> openFilters;
-	std::vector<nfdu8filteritem_t> saveFilters;
+	EditorConfig config;
+
+	std::deque<Request> TakeRequests();
 
 	template<typename T>
 	T& AddEditorWindow(std::unique_ptr<T> window)

@@ -9,6 +9,9 @@
 #include "SpawnerWindow.h"
 #include "EnvironmentWindow.h"
 
+#include "SceneManager.h"
+#include "RequestHandler.h"
+
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_sdl3.h"
 #include "imgui/backends/imgui_impl_sdlrenderer3.h"
@@ -40,6 +43,8 @@ static SDL_Renderer* gRenderer = nullptr;
 static std::unique_ptr<EditorUI> editor;
 static EnvironmentConfig enviroConfig;
 static SpawnerConfig spawnerConfig;
+
+static SceneManager sceneManager;
 
 static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
@@ -233,6 +238,11 @@ int main(int argc, char** argv)
 
 		world.tick(dt);
 		draw();
+
+		for (auto& req : editor->TakeRequests())
+		{
+			std::visit(RequestHandler{ sceneManager }, req);
+		}
 	}
 
 	close();
