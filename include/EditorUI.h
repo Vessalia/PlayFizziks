@@ -43,8 +43,7 @@ private:
 	void SaveAs();
 	void Save();
 
-	template<typename T>
-	void _PushRequest(T&& request) { requests.push_back(std::forward<T>(request)); }
+	void _PushRequest(const Request& request) { requests.push_back(request); }
 public:
 	EditorConfig config;
 
