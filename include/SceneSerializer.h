@@ -1,19 +1,12 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <optional>
+#include <Fizziks/FizzWorld.h>
 
-class Scene;
-class SerializedScene;
+#include <string>
 
 class SceneSerializer
 {
 public:
-	static bool Save(const Scene& scene, const std::string& path);
-	static std::optional<Scene> Load(const std::string& path);
-
-private:
-	static SerializedScene ToSerialized(const Scene& scene);
-	static Scene FromSerialized(const SerializedScene& data);
+	static bool Save(const Fizziks::FizzWorld* world, const std::string& path);
+	static bool Load(Fizziks::FizzWorld* world, const std::string& path);
 };

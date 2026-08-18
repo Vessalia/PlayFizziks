@@ -1,28 +1,15 @@
 #pragma once
 
 #include "EditorUI.h"
-#include "SceneManager.h"
 #include "SceneSerializer.h"
+
+#include "Fizziks/FizzWorld.h"
 
 struct RequestHandler
 {
-	SceneManager& sceneManager;
+	Fizziks::FizzWorld* world;
 
-	void operator()(const OpenRequest& r)
-	{
-		if (auto scene = SceneSerializer::Load(r.path))
-		{
-			sceneManager.SetScene(*scene);
-		}
-	}
-
-	void operator()(const SaveRequest& r)
-	{
-		SceneSerializer::Save(sceneManager.GetScene(), r.path);
-	}
-
-	void operator()(const SaveAsRequest& r)
-	{
-		SceneSerializer::Save(sceneManager.GetScene(), r.path);
-	}
+	bool operator()(const OpenRequest& r)   { return SceneSerializer::Load(world, r.path); }
+	bool operator()(const SaveRequest& r)   { return SceneSerializer::Save(world, r.path); }
+	bool operator()(const SaveAsRequest& r) { return SceneSerializer::Save(world, r.path); }
 };

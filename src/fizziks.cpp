@@ -9,7 +9,6 @@
 #include "SpawnerWindow.h"
 #include "EnvironmentWindow.h"
 
-#include "SceneManager.h"
 #include "RequestHandler.h"
 
 #include "imgui/imgui.h"
@@ -44,9 +43,7 @@ static std::unique_ptr<EditorUI> editor;
 static EnvironmentConfig enviroConfig;
 static SpawnerConfig spawnerConfig;
 
-static SceneManager sceneManager;
-
-static FizzWorld world = FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
+static FizzWorld* world = new FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
 static std::vector<RigidBody> bodies;
 
@@ -84,9 +81,9 @@ void createStage()
 		.setRestitution(0.1f)
 		.build();
 
-	bodies.push_back(world.createBody(left));
-	bodies.push_back(world.createBody(right));
-	bodies.push_back(world.createBody(bottom));
+	bodies.push_back(world->createBody(left));
+	bodies.push_back(world->createBody(right));
+	bodies.push_back(world->createBody(bottom));
 }
 
 void createBalls()
@@ -111,7 +108,7 @@ void createBalls()
 				.setRestitution(0.3f)
 				.setColliderDefs({ createColliderDef(createCircle(.2f), 0.1f) });
 
-			bodies.push_back(world.createBody(ballBuilder.build()));
+			bodies.push_back(world->createBody(ballBuilder.build()));
 		}
 	}
 }
@@ -236,12 +233,22 @@ int main(int argc, char** argv)
 		float dt = (SDL_GetTicks() - lt) / 1000.f;
 		lt = SDL_GetTicks();
 
-		world.tick(dt);
+		world->tick(dt);
 		draw();
 
 		for (auto& req : editor->TakeRequests())
 		{
-			std::visit(RequestHandler{ sceneManager }, req);
+			FizzWorld* newWorld = new FizzWorld();
+			bool result = std::visit(RequestHandler{ newWorld }, req);
+			if (result)
+			{
+				delete(world);
+				world = newWorld;
+			}
+			else
+			{
+				delete(newWorld);
+			}
 		}
 	}
 
@@ -263,7 +270,7 @@ void draw()
 
 	if (enviroConfig.drawDebug)
 	{
-		auto info = world.getBroadphaseDebugInfo();
+		auto info = world->getBroadphaseDebugInfo();
 		SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
 		for (const auto& aabb : info)
 		{
@@ -278,7 +285,7 @@ void draw()
 		}
 	}
 
-	for (const auto& body : world.getActiveBodies())
+	for (const auto& body : world->getActiveBodies())
 	{
 		renderBody(body);
 	}
@@ -590,12 +597,14 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 
 Vec2 transformToScreenSpace(Vec2 pos)
 {
-	Vec2 scale = world.worldScale();
+	Vec2 scale = world->worldScale();
 	return { pos.x * WIDTH / scale.x, pos.y * HEIGHT / scale.y };
 }
 
 void close()
 {
+	delete(world);
+
 	NFD_Quit();
 
 	ImGui_ImplSDLRenderer3_Shutdown();
