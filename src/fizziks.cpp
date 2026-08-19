@@ -117,7 +117,7 @@ bool initSDL()
 {
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
 	{
-		printf("Error: SDL_Init(): %s\n", SDL_GetError());
+		SDL_Log("Error: SDL_Init(): %s\n", SDL_GetError());
 		return false;
 	}
 
@@ -126,7 +126,7 @@ bool initSDL()
 	gWindow = SDL_CreateWindow("PlayFizziks", (int)(WIDTH), (int)(HEIGHT), window_flags);
 	if (gWindow == nullptr)
 	{
-		printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
+		SDL_Log("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
 		return false;
 	}
 
@@ -172,11 +172,13 @@ bool initImGui()
 	}
 
 	editor = std::make_unique<EditorUI>();
+	editor->config.openFilters = { FileFilter{"Load a Scene", "fizz"} };
+	editor->config.saveFilters = { FileFilter{"Save a Scene", "fizz"} };
 
-	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(&world, spawnerConfig);
+	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(world, spawnerConfig);
 	editor->AddEditorWindow(std::move(spawner));
 
-	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(&world, enviroConfig);
+	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(world, enviroConfig);
 	editor->AddEditorWindow(std::move(enviro));
 
 	return true;
@@ -184,8 +186,8 @@ bool initImGui()
 
 int main(int argc, char** argv)
 {
-	bool sdl_error = initSDL();
-	bool imgui_error = initImGui();
+	bool sdl_error = !initSDL();
+	bool imgui_error = !initImGui();
 
 	if(sdl_error || imgui_error)
 	{
@@ -204,6 +206,7 @@ int main(int argc, char** argv)
 	createStage();
 	createBalls();
 
+	float skipTime = 0;
 	bool quit = false;
 	while (!quit)
 	{
@@ -230,24 +233,20 @@ int main(int argc, char** argv)
 			}
 		}
 
-		float dt = (SDL_GetTicks() - lt) / 1000.f;
-		lt = SDL_GetTicks();
+		float time = SDL_GetTicks();
+		float dt = (time - lt) / 1000.f;
+		lt = time;
+		skipTime = 0;
 
 		world->tick(dt);
 		draw();
 
 		for (auto& req : editor->TakeRequests())
 		{
-			FizzWorld* newWorld = new FizzWorld();
-			bool result = std::visit(RequestHandler{ newWorld }, req);
-			if (result)
+			bool result = std::visit(RequestHandler{ world }, req);
+			if (!result)
 			{
-				delete(world);
-				world = newWorld;
-			}
-			else
-			{
-				delete(newWorld);
+				printf("The requested operation failed\n");
 			}
 		}
 	}

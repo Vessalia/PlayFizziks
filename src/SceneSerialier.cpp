@@ -1,8 +1,8 @@
 #include "SceneSerializer.h"
 #include "Fizziks/Shape.h"
 #include "Fizziks/BodyDefBuilder.h"
+#include "nlohmann/json.hpp"
 
-#include <nlohmann/json.hpp>
 #include <fstream>
 #include <variant>
 
@@ -86,7 +86,7 @@ bool SceneSerializer::Save(const Fizziks::FizzWorld* world, const std::string& p
 					}
 					outshape["vertices"] = vertices;
 				}
-				else constexpr
+				else
 				{
 					static_assert(false, "non-exhaustive visitor!");
 				}
@@ -103,7 +103,7 @@ bool LoadV1(Fizziks::FizzWorld* world, const nlohmann::json& json)
 	auto& inworld = json["world"];
 	world->Gravity = { inworld["gravity"][0], inworld["gravity"][1] };
 	world->timescale = inworld["timescale"];
-	world->broadphase(inworld["broadphase"]);
+	world->broadphase(Fizziks::FizzWorld::AccelStruct(inworld["broadphase"]));
 	world->worldScale({ inworld["scale"][0], inworld["scale"][1] });
 	world->collisionIterations(inworld["collisionIterations"]);
 	world->timestep(inworld["timestep"]);
@@ -138,6 +138,8 @@ bool LoadV1(Fizziks::FizzWorld* world, const nlohmann::json& json)
 
 		world->createBody(builder.build());
 	}
+
+	return true;
 }
 
 bool SceneSerializer::Load(Fizziks::FizzWorld* world, const std::string& path)
@@ -151,7 +153,7 @@ bool SceneSerializer::Load(Fizziks::FizzWorld* world, const std::string& path)
 		in >> json;
 		if (json["version"] == 1)
 		{
-			LoadV1(world, json);
+			return LoadV1(world, json);
 		}
 		else
 		{

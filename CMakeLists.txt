@@ -56,7 +56,7 @@ add_executable(PlayFizziks ${SOURCES} ${INCLUDES})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT PlayFizziks)
 
-target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3 ImGui nfd json)
+target_link_libraries(PlayFizziks PRIVATE Fizziks SDL3::SDL3 ImGui nfd nlohmann_json::nlohmann_json)
 
 target_include_directories(PlayFizziks PRIVATE
     ${CMAKE_SOURCE_DIR}/include

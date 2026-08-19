@@ -25,7 +25,7 @@ void EditorUI::OnImguiRender()
 		firstFrame = false;
 	}
 
-	_DrawDockSpace();
+	//_DrawDockSpace();
 	_DrawMainMenuBar();
 
 	for (const auto& window : mWindows)
@@ -34,7 +34,7 @@ void EditorUI::OnImguiRender()
 	}
 
 	//// begin is called in _DrawDockSpace()
-	ImGui::End();
+	//ImGui::End();
 }
 
 void EditorUI::_DrawDockSpace()

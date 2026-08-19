@@ -10,11 +10,12 @@ using namespace Fizziks;
 
 struct EnvironmentConfig
 {
-	float timescale = 1;
-	float gravity[2] = { 0, -9.81 };
 	bool paused = false;
-	FizzWorld::AccelStruct accel = FizzWorld::AccelStruct::BVH;
 	bool drawDebug = false;
+
+	float gravity[2] = { 0, -9.81 };
+	float timescale = 1;
+	FizzWorld::AccelStruct accel = FizzWorld::AccelStruct::BVH;
 };
 
 class EnvironmentWindow : public ImGuiWindow
