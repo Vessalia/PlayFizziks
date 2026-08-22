@@ -1,0 +1,124 @@
+{
+    "bodies": [
+        {
+            "angularDamping": 0.05000000074505806,
+            "angularVelocity": 0.0,
+            "bodyType": 0,
+            "colliders": [
+                {
+                    "dynamicFrictionCoeff": 0.10000000149011612,
+                    "mass": 0.0,
+                    "position": [
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": 0.0,
+                    "shape": {
+                        "height": 0.20000000298023224,
+                        "type": "rect",
+                        "width": 3.0
+                    },
+                    "staticFrictionCoeff": 0.20000000298023224
+                }
+            ],
+            "gravityScale": 1.0,
+            "layer": 0,
+            "linearDamping": 0.05000000074505806,
+            "position": [
+                10.0,
+                6.0
+            ],
+            "restitution": 0.30000001192092896,
+            "rotation": 0.0,
+            "velocity": [
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "angularDamping": 0.05000000074505806,
+            "angularVelocity": 0.0,
+            "bodyType": 0,
+            "colliders": [
+                {
+                    "dynamicFrictionCoeff": 0.10000000149011612,
+                    "mass": 0.0,
+                    "position": [
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": 0.0,
+                    "shape": {
+                        "height": 3.0,
+                        "type": "rect",
+                        "width": 0.20000000298023224
+                    },
+                    "staticFrictionCoeff": 0.20000000298023224
+                }
+            ],
+            "gravityScale": 1.0,
+            "layer": 0,
+            "linearDamping": 0.05000000074505806,
+            "position": [
+                8.600000381469727,
+                7.599999904632568
+            ],
+            "restitution": 0.30000001192092896,
+            "rotation": 0.0,
+            "velocity": [
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "angularDamping": 0.05000000074505806,
+            "angularVelocity": 0.0,
+            "bodyType": 0,
+            "colliders": [
+                {
+                    "dynamicFrictionCoeff": 0.10000000149011612,
+                    "mass": 0.0,
+                    "position": [
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": 0.0,
+                    "shape": {
+                        "height": 3.0,
+                        "type": "rect",
+                        "width": 0.20000000298023224
+                    },
+                    "staticFrictionCoeff": 0.20000000298023224
+                }
+            ],
+            "gravityScale": 1.0,
+            "layer": 0,
+            "linearDamping": 0.05000000074505806,
+            "position": [
+                11.399999618530273,
+                7.599999904632568
+            ],
+            "restitution": 0.30000001192092896,
+            "rotation": 0.0,
+            "velocity": [
+                0.0,
+                0.0
+            ]
+        }
+    ],
+    "version": 1,
+    "world": {
+        "broadphase": 1,
+        "collisionIterations": 5,
+        "gravity": [
+            0.0,
+            -9.8100004196167
+        ],
+        "scale": [
+            20,
+            20
+        ],
+        "timescale": 1.0,
+        "timestep": 0.03333333507180214
+    }
+}

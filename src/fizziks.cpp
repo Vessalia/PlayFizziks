@@ -20,12 +20,12 @@
 #include "Fizziks/Fizziks.h"
 #include "Fizziks/FizzWorld.h"
 #include "Fizziks/RigidBody.h"
-#include "Fizziks/RigidDef.h"
 #include "Fizziks/Shape.h"
 #include "Fizziks/Vec.h"
 #include "Fizziks/MathUtils.h"
 #include "Fizziks/Log.h"
-#include "Fizziks/BodyDefBuilder.h"
+#include "Fizziks/BodyDef.h"
+#include "Fizziks/ColliderDef.h"
 
 using namespace Fizziks;
 
@@ -38,6 +38,7 @@ float mainScale = 1;
 
 static SDL_Window* gWindow = nullptr;
 static SDL_Renderer* gRenderer = nullptr;
+bool drawDebug = false;
 
 static std::unique_ptr<EditorUI> editor;
 static EnvironmentConfig enviroConfig;
@@ -45,19 +46,17 @@ static SpawnerConfig spawnerConfig;
 
 static FizzWorld* world = new FizzWorld(20, 20, 5, 1 / 30.f, Fizziks::FizzWorld::AccelStruct::BVH);
 
-static std::vector<RigidBody> bodies;
-
 Uint32 lt = SDL_GetTicks();
 
 void draw();
 void close();
 
 void renderBody(const RigidBody& rb);
-void renderCircle(const Circle& circle, const Vec2& pos, val_t angle);
-void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
-void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
-void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color);
-void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, val_t angle, const SDL_FColor& color);
+void renderCircle(const Circle& circle, const Vec2& pos, float angle);
+void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color);
+void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color);
+void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color);
+void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, float angle, const SDL_FColor& color);
 
 Vec2 transformToScreenSpace(Vec2 pos);
 
@@ -65,25 +64,25 @@ void createStage()
 {
 	BodyDef left = BodyDefBuilder().setInitPosition({ 0, 0 })
 		.setBodyType(BodyType::STATIC)
-		.setColliderDefs({ createColliderDef(createRect(1, 20)) })
+		.setColliderDefs({ ColliderDefBuilder().setShape(createRect(1, 20)).build() })
 		.setRestitution(0.0f)
 		.build();
 
 	BodyDef right = BodyDefBuilder().setInitPosition({ 20, 0 })
 		.setBodyType(BodyType::STATIC)
-		.setColliderDefs({ createColliderDef(createRect(1, 20)) })
+		.setColliderDefs({ ColliderDefBuilder().setShape(createRect(1, 20)).build() })
 		.setRestitution(0.0f)
 		.build();
 
 	BodyDef bottom = BodyDefBuilder().setInitPosition({ 10, 0.5 })
 		.setBodyType(BodyType::STATIC)
-		.setColliderDefs({ createColliderDef(createRect(20, 1)) })
+		.setColliderDefs({ ColliderDefBuilder().setShape(createRect(20, 1)).build() })
 		.setRestitution(0.1f)
 		.build();
 
-	bodies.push_back(world->createBody(left));
-	bodies.push_back(world->createBody(right));
-	bodies.push_back(world->createBody(bottom));
+	world->createBody(left);
+	world->createBody(right);
+	world->createBody(bottom);
 }
 
 void createBalls()
@@ -106,11 +105,17 @@ void createBalls()
 				.setBodyType(BodyType::DYNAMIC)
 				.setGravityScale(1.0f)
 				.setRestitution(0.3f)
-				.setColliderDefs({ createColliderDef(createCircle(.2f), 0.1f) });
+				.setColliderDefs({ ColliderDefBuilder().setShape(createCircle(0.2f)).setMass(0.1f).build()});
 
-			bodies.push_back(world->createBody(ballBuilder.build()));
+			world->createBody(ballBuilder.build());
 		}
 	}
+}
+
+void createScene()
+{
+	createStage();
+	createBalls();
 }
 
 bool initSDL()
@@ -175,13 +180,50 @@ bool initImGui()
 	editor->config.openFilters = { FileFilter{"Load a Scene", "fizz"} };
 	editor->config.saveFilters = { FileFilter{"Save a Scene", "fizz"} };
 
-	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(world, spawnerConfig);
+	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(spawnerConfig);
 	editor->AddEditorWindow(std::move(spawner));
 
-	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(world, enviroConfig);
+	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(enviroConfig);
 	editor->AddEditorWindow(std::move(enviro));
 
 	return true;
+}
+
+void handleSpawnerConfig()
+{
+	world->createBody(spawnerConfig.def);
+}
+
+void handleEnvironmentConfig()
+{
+	world->timescale = enviroConfig.timescale;
+	if (enviroConfig.paused)
+	{
+		world->timescale = 0;
+	}
+	world->broadphase(enviroConfig.accel);
+	world->Gravity = { enviroConfig.gravity[0], enviroConfig.gravity[1] };
+	drawDebug = enviroConfig.drawDebug;
+	if (enviroConfig.clear)
+	{
+		world->destroyAllBodies();
+		enviroConfig.clear = false;
+	}
+}
+
+void handleConfigs()
+{
+	if (spawnerConfig.dirty)
+	{
+		handleSpawnerConfig();
+		spawnerConfig.dirty = false;
+	}
+
+	if (enviroConfig.dirty)
+	{
+		handleEnvironmentConfig();
+		enviroConfig.dirty = false;
+	}
 }
 
 int main(int argc, char** argv)
@@ -203,8 +245,7 @@ int main(int argc, char** argv)
 		}, options
 	);
 
-	createStage();
-	createBalls();
+	createScene();
 
 	float skipTime = 0;
 	bool quit = false;
@@ -233,22 +274,26 @@ int main(int argc, char** argv)
 			}
 		}
 
-		float time = SDL_GetTicks();
+		float time = SDL_GetTicks() - skipTime;
 		float dt = (time - lt) / 1000.f;
 		lt = time;
-		skipTime = 0;
 
 		world->tick(dt);
 		draw();
 
+		// need to handle current dt compensation death spiral
+		skipTime = SDL_GetTicks();
 		for (auto& req : editor->TakeRequests())
 		{
-			bool result = std::visit(RequestHandler{ world }, req);
+			bool result = std::visit(RequestHandler{ &world }, req);
 			if (!result)
 			{
 				printf("The requested operation failed\n");
 			}
 		}
+
+		handleConfigs();
+		skipTime = SDL_GetTicks() - skipTime; // this doesn't seem to work...
 	}
 
 	close();
@@ -267,7 +312,7 @@ void draw()
 	SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(gRenderer);
 
-	if (enviroConfig.drawDebug)
+	if (drawDebug)
 	{
 		auto info = world->getBroadphaseDebugInfo();
 		SDL_SetRenderDrawColor(gRenderer, 255, 0, 255, 255);
@@ -312,11 +357,11 @@ void renderBody(const RigidBody& body)
 
 	const auto colliders = body.colliders();
 	Vec2 bodyPos = body.centroidPosition();
-	val_t rot = body.rotation();
+	float rot = body.rotation();
 	for (const auto& collider : colliders)
 	{
-		val_t angle = rot + collider.rotation;
-		Vec2 localPos = bodyPos + collider.pos;
+		float angle = rot + collider.rotation;
+		Vec2 localPos = bodyPos + collider.position;
 		Vec2 pos = transformToScreenSpace(localPos);
 		const Shape& shape = collider.shape;
 		if (std::holds_alternative<Circle>(shape))
@@ -342,9 +387,9 @@ void renderBody(const RigidBody& body)
 	}
 }
 
-void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
+void renderCircle(const Circle& circle, const Vec2& pos, float angle)
 {
-	val_t r = circle.radius;
+	float r = circle.radius;
 	int sr = (int)transformToScreenSpace(Vec2{ r, 0 }).x;
 
 	int x = (int)pos.x;
@@ -371,7 +416,7 @@ void renderCircle(const Circle& circle, const Vec2& pos, val_t angle)
 
 static std::vector<SDL_Vertex> sdlVerts;
 std::vector<int> indices;
-void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color)
 {
 	const int segments = 64;
 	sdlVerts.clear();
@@ -414,7 +459,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 	);
 }
 
-void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color)
 {
 	// Four corners in local space (centered on origin)
 	float hw = rect.width * 0.5f;
@@ -442,19 +487,19 @@ void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, val
 	SDL_RenderGeometry(gRenderer, nullptr, vertices, 4, indices, 6);
 }
 
-void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, val_t angle, const SDL_FColor& color)
+void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color)
 {
 	const auto& verts = polygon.vertices;
 
 	// Compute centroid of the raw vertices so we can render centroid-relative,
 	// matching how the physics internally represents the shape
 	Vec2 centroid = Vec2::Zero();
-	val_t area = 0;
+	float area = 0;
 	for (size_t i = 0; i < verts.size(); ++i)
 	{
 		const Vec2& v0 = verts[i];
 		const Vec2& v1 = verts[(i + 1) % verts.size()];
-		val_t cross = v0.cross(v1);
+		float cross = v0.cross(v1);
 		centroid += (v0 + v1) * cross;
 		area += cross;
 	}
@@ -531,7 +576,7 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 		indices.data(), static_cast<int>(indices.size()));
 }
 
-void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, val_t angle, const SDL_FColor& color)
+void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, float angle, const SDL_FColor& color)
 {
 	const int hemisphereSegments = 16; // per hemisphere
 	const float r = capsule.capHeight; // for now we'll just assume the cap perfectly covers the top/bottom
@@ -596,7 +641,7 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 
 Vec2 transformToScreenSpace(Vec2 pos)
 {
-	Vec2 scale = world->worldScale();
+	Vec2 scale = { (float)world->worldScale().x, (float)world->worldScale().y };
 	return { pos.x * WIDTH / scale.x, pos.y * HEIGHT / scale.y };
 }
 

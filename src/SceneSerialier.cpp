@@ -1,6 +1,7 @@
 #include "SceneSerializer.h"
 #include "Fizziks/Shape.h"
-#include "Fizziks/BodyDefBuilder.h"
+#include "Fizziks/BodyDef.h"
+#include "Fizziks/ColliderDef.h"
 #include "nlohmann/json.hpp"
 
 #include <fstream>
@@ -47,7 +48,7 @@ bool SceneSerializer::Save(const Fizziks::FizzWorld* world, const std::string& p
 			outcol["staticFrictionCoeff"] = collider.staticFrictionCoeff;
 			outcol["dynamicFrictionCoeff"] = collider.dynamicFrictionCoeff;
 			outcol["rotation"] = collider.rotation;
-			outcol["position"] = { collider.pos.x, collider.pos.y };
+			outcol["position"] = { collider.position.x, collider.position.y };
 			std::visit([&outcol](const auto& s)
 			{
 				auto& outshape = outcol["shape"];
@@ -79,7 +80,7 @@ bool SceneSerializer::Save(const Fizziks::FizzWorld* world, const std::string& p
 				else if constexpr (std::is_same_v<T, Fizziks::Polygon>)
 				{
 					outshape["type"] = "polygon";
-					std::vector<std::array<Fizziks::val_t, 2>> vertices;
+					std::vector<std::array<float, 2>> vertices;
 					for (const auto& vert : s.vertices)
 					{
 						vertices.push_back( {vert.x, vert.y} );
@@ -96,6 +97,41 @@ bool SceneSerializer::Save(const Fizziks::FizzWorld* world, const std::string& p
 
 	out << json.dump(4);
 	return out.good();
+}
+
+Fizziks::Shape ShapeFromJson(const nlohmann::json& outshape)
+{
+	const std::string type = outshape["type"];
+
+	if (type == "circle")
+	{
+		return Fizziks::Circle{ outshape["radius"] };
+	}
+	else if (type == "rect")
+	{
+		return Fizziks::Rect{ outshape["width"], outshape["height"] };
+	}
+	else if (type == "ellipse")
+	{
+		return Fizziks::Ellipse{ outshape["rx"], outshape["ry"] };
+	}
+	else if (type == "capsule")
+	{
+		Fizziks::Rect body{ outshape["rect"]["width"], outshape["rect"]["height"] };
+		return Fizziks::Capsule{ outshape["capHeight"], body };
+	}
+	else if (type == "polygon")
+	{
+		std::vector<Fizziks::Vec2> vertices;
+		vertices.reserve(outshape["vertices"].size());
+		for (const auto& v : outshape["vertices"])
+		{
+			vertices.push_back({ v[0], v[1] });
+		}
+		return Fizziks::Polygon{ vertices };
+	}
+
+	throw std::runtime_error("ShapeFromJson: unknown shape type '" + type + "'");
 }
 
 bool LoadV1(Fizziks::FizzWorld* world, const nlohmann::json& json)
@@ -127,12 +163,14 @@ bool LoadV1(Fizziks::FizzWorld* world, const nlohmann::json& json)
 		std::vector<Fizziks::ColliderDef> colliderDefs;
 		for (const auto& incol : inbody["colliders"])
 		{
-			Fizziks::ColliderDef colliderDef;
-			colliderDef.mass = incol["mass"];
-			colliderDef.staticFrictionCoeff = incol["staticFrictionCoeff"];
-			colliderDef.dynamicFrictionCoeff = incol["dynamicFrictionCoeff"];
-			colliderDef.rotation = incol["rotation"];
-			colliderDef.pos = { incol["position"][0], incol["position"][1] };
+			colliderDefs.push_back(Fizziks::ColliderDefBuilder()
+				.setMass(incol["mass"])
+				.setStaticFrictionCoeff(incol["staticFrictionCoeff"])
+				.setDynamicFrictionCoeff(incol["dynamicFrictionCoeff"])
+				.setRotation(incol["rotation"])
+				.setPosition({ incol["position"][0], incol["position"][1] })
+				.setShape(ShapeFromJson(incol["shape"]))
+				.build());
 		}
 		builder.setColliderDefs(colliderDefs);
 
@@ -161,6 +199,10 @@ bool SceneSerializer::Load(Fizziks::FizzWorld* world, const std::string& path)
 		}
 	}
 	catch (const nlohmann::json::exception& e)
+	{
+		return false;
+	}
+	catch (const std::runtime_error& e)
 	{
 		return false;
 	}

@@ -10,35 +10,42 @@ using namespace Fizziks;
 
 struct EnvironmentConfig
 {
+	bool clear = false;
 	bool paused = false;
 	bool drawDebug = false;
 
 	float gravity[2] = { 0, -9.81 };
 	float timescale = 1;
 	FizzWorld::AccelStruct accel = FizzWorld::AccelStruct::BVH;
+
+	bool dirty = false;
 };
 
 class EnvironmentWindow : public ImGuiWindow
 {
 private:
-	Fizziks::FizzWorld* world;
 	EnvironmentConfig& config;
 
 public:
-	EnvironmentWindow(Fizziks::FizzWorld* world, EnvironmentConfig& config, bool showWindow = true)
+	EnvironmentWindow(EnvironmentConfig& config, bool showWindow = true)
 	: ImGuiWindow("Environment", showWindow)
-	, world(world)
 	, config(config) { }
 
 protected:
 	virtual void DrawWindow() override
 	{
+		if (ImGui::Button("Clear Scene"))
+		{
+			config.clear = true;
+			config.dirty = true;
+		}
+
 		if (!config.paused)
 		{
 			if (ImGui::Button("Pause"))
 			{
 				config.paused = true;
-				world->timescale = 0;
+				config.dirty = true;
 			}
 		}
 		else
@@ -46,29 +53,31 @@ protected:
 			if (ImGui::Button("Resume"))
 			{
 				config.paused = false;
-				world->timescale = config.timescale;
+				config.dirty = true;
 			}
 		}
 
-		ImGui::Checkbox("Draw Broadphase Visualization", &config.drawDebug);
-
-		if (ImGui::SliderFloat("Timescale", &config.timescale, 0, 2) && !config.paused)
+		if (ImGui::Checkbox("Draw Broadphase Visualization", &config.drawDebug))
 		{
-			world->timescale = config.timescale;
+			config.dirty = true;
 		}
 
-		ImGui::InputFloat2("Gravity", config.gravity);
-		if (world->Gravity.x != config.gravity[0] || world->Gravity.y != config.gravity[1])
+		if (ImGui::SliderFloat("Timescale", &config.timescale, 0, 2))
 		{
-			world->Gravity = { config.gravity[0], config.gravity[1] };
+			config.dirty = true;
+		}
+		
+		if (ImGui::InputFloat2("Gravity", config.gravity))
+		{
+			config.dirty = true;
 		}
 
-		const char* accelNames[] = { "Simple", "BVH" };
+		const char* accelNames[2] = { "Simple", "BVH" };
 		int accelIndex = static_cast<int>(config.accel);
 		if (ImGui::Combo("Broadphase", &accelIndex, accelNames, IM_ARRAYSIZE(accelNames)))
 		{
 			config.accel = static_cast<FizzWorld::AccelStruct>(accelIndex);
-			world->broadphase(config.accel);
+			config.dirty = true;
 		}
 	}
 };

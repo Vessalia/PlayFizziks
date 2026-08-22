@@ -8,7 +8,8 @@
 
 #include "Fizziks/Fizzworld.h"
 #include "Fizziks/RigidBody.h"
-#include "Fizziks/BodyDefBuilder.h"
+#include "Fizziks/BodyDef.h"
+#include "Fizziks/ColliderDef.h"
 #include "Fizziks/Fizziks.h"
 #include "Fizziks/Vec.h"
 
@@ -18,7 +19,7 @@ struct SpawnerConfig
 
 	ShapeType shapeType = ShapeType::Circle;
 	Fizziks::BodyType bodyType = Fizziks::BodyType::DYNAMIC;
-	float pos[2] = { 10.0f, 10.0f };
+	float position[2] = { 10.0f, 10.0f };
 
 	float circleRadius = 0.2f;
 	float ellipseRx = 0.3f, ellipseRy = 0.2f;
@@ -31,36 +32,25 @@ struct SpawnerConfig
 
 	float mass = 1;
 	float restitution = 0.3f;
+
+	Fizziks::BodyDef def;
+
+	bool dirty = false;
 };
 
 class SpawnerWindow : public ImGuiWindow
 {
 private:
-
-	Fizziks::FizzWorld* world;
-	std::vector<Fizziks::RigidBody> bodies;
-
 	SpawnerConfig& config;
 
 public:
-	SpawnerWindow(Fizziks::FizzWorld* world, SpawnerConfig& config, bool showWindow = true)
+	SpawnerWindow(SpawnerConfig& config, bool showWindow = true)
 	: ImGuiWindow("Spawn", showWindow)
-	, world(world)
 	, config(config) { }
 
 protected:
 	virtual void DrawWindow() override
 	{
-		if (ImGui::Button("Clear Scene"))
-		{
-			for (auto& body : bodies)
-			{
-				world->destroyBody(body);
-			}
-
-			bodies.clear();
-		}
-
 		ImGui::BeginChild("Create a RigidBody");
 
 		const char* shapeNames[] = { "Circle", "Ellipse", "Rect", "Polygon", "Capsule" };
@@ -77,7 +67,7 @@ protected:
 			config.bodyType = static_cast<Fizziks::BodyType>(bodyTypeIndex);
 		}
 
-		ImGui::InputFloat2("Position", config.pos);
+		ImGui::InputFloat2("Position", config.position);
 
 		bool canSpawn = true;
 
@@ -166,14 +156,14 @@ protected:
 				break;
 			}
 
-			Fizziks::BodyDef def = Fizziks::BodyDefBuilder()
-				.setInitPosition({ config.pos[0], config.pos[1] })
+			config.def = Fizziks::BodyDefBuilder()
+				.setInitPosition({ config.position[0], config.position[1] })
 				.setBodyType(config.bodyType)
-				.setColliderDefs({ Fizziks::createColliderDef(shape, config.mass) })
+				.setColliderDefs({ Fizziks::ColliderDefBuilder().setShape(shape).setMass(config.mass).build() })
 				.setRestitution(config.restitution)
 				.build();
 
-			bodies.push_back(world->createBody(def));
+			config.dirty = true;
 		}
 		ImGui::EndDisabled();
 
