@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  FIZZIKS_VERSION: v0.9.1
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out PlayFizziks
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download Fizziks
+        shell: pwsh
+        run: |
+          $version = $env:FIZZIKS_VERSION
+          $url = "https://github.com/Vessalia/Fizziks/releases/download/$version/Fizziks-$version-windows-x64.zip"
+
+          Invoke-WebRequest `
+            -Uri $url `
+            -OutFile Fizziks.zip
+
+          Expand-Archive `
+            -Path Fizziks.zip `
+            -DestinationPath dependencies
+
+          Remove-Item Fizziks.zip
+
+      - name: Configure CMake
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Prepare package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path PlayFizziks
+
+          Copy-Item build/bin/Release/* PlayFizziks/ -Recurse
+
+          if (Test-Path assets) {
+            Copy-Item assets PlayFizziks/assets -Recurse
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path PlayFizziks `
+            -DestinationPath "PlayFizziks-${{ github.ref_name }}-windows-x64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "PlayFizziks-${{ github.ref_name }}-windows-x64.zip"

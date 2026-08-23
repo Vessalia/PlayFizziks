@@ -58,7 +58,14 @@ void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, flo
 void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroidPos, float angle, const SDL_FColor& color);
 void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, float angle, const SDL_FColor& color);
 
-Vec2 transformToScreenSpace(Vec2 pos);
+Vec2 worldToScreen(Vec2 worldPos);
+Vec2 screenToWorld(Vec2 screenPos);
+
+void drawGhost();
+void drawCircleOutline(int cx, int cy, int r);
+void drawEllipseOutline(int cx, int cy, float worldRx, float worldRy);
+void drawRectOutline(int cx, int cy, float worldW, float worldH);
+void drawPolygonInProgress(Vec2 mouseWorld);
 
 void createStage()
 {
@@ -105,7 +112,7 @@ void createBalls()
 				.setBodyType(BodyType::DYNAMIC)
 				.setGravityScale(1.0f)
 				.setRestitution(0.3f)
-				.setColliderDefs({ ColliderDefBuilder().setShape(createCircle(0.2f)).setMass(0.1f).build()});
+				.setColliderDefs({ ColliderDefBuilder().setShape(createCircle(0.2f)).setMass(0.1f).build() });
 
 			world->createBody(ballBuilder.build());
 		}
@@ -231,7 +238,7 @@ int main(int argc, char** argv)
 	bool sdl_error = !initSDL();
 	bool imgui_error = !initImGui();
 
-	if(sdl_error || imgui_error)
+	if (sdl_error || imgui_error)
 	{
 		printf("Program failure, exiting...\n");
 		return 1;
@@ -245,7 +252,7 @@ int main(int argc, char** argv)
 		}, options
 	);
 
-	createScene();
+	// createScene();
 
 	float skipTime = 0;
 	bool quit = false;
@@ -267,9 +274,37 @@ int main(int argc, char** argv)
 			{
 				switch (e.key.key)
 				{
-					case SDLK_ESCAPE:
-						quit = true;
-						break;
+				case SDLK_ESCAPE:
+					quit = true;
+					break;
+				}
+			}
+			else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !ImGui::GetIO().WantCaptureMouse)
+			{
+				if (e.button.button == SDL_BUTTON_LEFT)
+				{
+					Vec2 worldPos = screenToWorld({ e.button.x, e.button.y });
+
+					if (spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePoint)
+					{
+						spawnerConfig.position[0] = worldPos.x;
+						spawnerConfig.position[1] = worldPos.y;
+						spawnerConfig.placeMode = SpawnerConfig::PlaceMode::None;
+					}
+					else if (spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex)
+					{
+						spawnerConfig.polyVerts.push_back(worldPos);
+					}
+				}
+				else if (e.button.button == SDL_BUTTON_RIGHT)
+				{
+					if (spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex)
+					{
+						Vec2 centroid = Fizziks::getCentroid(spawnerConfig.polyVerts); // place the poly where the user was building it
+						spawnerConfig.position[0] = centroid.x;
+						spawnerConfig.position[1] = centroid.y;
+						spawnerConfig.placeMode = SpawnerConfig::PlaceMode::None;
+					}
 				}
 			}
 		}
@@ -319,9 +354,9 @@ void draw()
 		for (const auto& aabb : info)
 		{
 			SDL_FRect rect;
-			Vec2 dim = transformToScreenSpace(aabb.max - aabb.min);
-			Vec2 topLeft = transformToScreenSpace(aabb.min);
-			Vec2 topRight = transformToScreenSpace(aabb.max);
+			Vec2 dim = worldToScreen(aabb.max - aabb.min);
+			Vec2 topLeft = worldToScreen(aabb.min);
+			Vec2 topRight = worldToScreen(aabb.max);
 
 			rect.x = topLeft.x; rect.y = HEIGHT - topRight.y;
 			rect.w = dim.x; rect.h = dim.y;
@@ -333,6 +368,8 @@ void draw()
 	{
 		renderBody(body);
 	}
+
+	drawGhost();
 
 	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), gRenderer);
 	SDL_RenderPresent(gRenderer);
@@ -362,7 +399,7 @@ void renderBody(const RigidBody& body)
 	{
 		float angle = rot + collider.rotation;
 		Vec2 localPos = bodyPos + collider.position;
-		Vec2 pos = transformToScreenSpace(localPos);
+		Vec2 pos = worldToScreen(localPos);
 		const Shape& shape = collider.shape;
 		if (std::holds_alternative<Circle>(shape))
 		{
@@ -390,7 +427,7 @@ void renderBody(const RigidBody& body)
 void renderCircle(const Circle& circle, const Vec2& pos, float angle)
 {
 	float r = circle.radius;
-	int sr = (int)transformToScreenSpace(Vec2{ r, 0 }).x;
+	int sr = (int)worldToScreen(Vec2{ r, 0 }).x;
 
 	int x = (int)pos.x;
 	int y = HEIGHT - (int)pos.y;
@@ -432,7 +469,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 	{
 		float theta = (TWO_PI * i) / segments;
 		Vec2 local = Vec2{ ellipse.rx * std::cos(theta), ellipse.ry * std::sin(theta) }.rotated(angle);
-		Vec2 screen = transformToScreenSpace(centeroidPos + local);
+		Vec2 screen = worldToScreen(centeroidPos + local);
 
 		SDL_Vertex v;
 		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
@@ -451,11 +488,7 @@ void renderEllipse(const Ellipse& ellipse, const Vec2& pos, const Vec2& centeroi
 		indices.push_back(i % segments + 1);
 	}
 
-	SDL_RenderGeometry(
-		gRenderer,
-		nullptr,
-		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-		indices.data(), static_cast<int>(indices.size())
+	SDL_RenderGeometry(gRenderer, nullptr, sdlVerts.data(), static_cast<int>(sdlVerts.size()), indices.data(), static_cast<int>(indices.size())
 	);
 }
 
@@ -476,7 +509,7 @@ void renderRect(const Rect& rect, const Vec2& pos, const Vec2& centeroidPos, flo
 
 	for (int i = 0; i < 4; ++i)
 	{
-		Vec2 screen = transformToScreenSpace(centeroidPos + corners[i].rotated(angle));
+		Vec2 screen = worldToScreen(centeroidPos + corners[i].rotated(angle));
 		vertices[i].position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
 		vertices[i].color = color;
 		vertices[i].tex_coord = SDL_FPoint{ 0, 0 };
@@ -493,24 +526,14 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 
 	// Compute centroid of the raw vertices so we can render centroid-relative,
 	// matching how the physics internally represents the shape
-	Vec2 centroid = Vec2::Zero();
-	float area = 0;
-	for (size_t i = 0; i < verts.size(); ++i)
-	{
-		const Vec2& v0 = verts[i];
-		const Vec2& v1 = verts[(i + 1) % verts.size()];
-		float cross = v0.cross(v1);
-		centroid += (v0 + v1) * cross;
-		area += cross;
-	}
-	if (area != 0) centroid /= (3 * area);
+	Vec2 centroid = Fizziks::getCentroid(verts);
 
 	sdlVerts.clear();
 	sdlVerts.reserve(verts.size());
 
 	for (const auto& vert : verts)
 	{
-		Vec2 screenV = transformToScreenSpace(centeroidPos + (vert - centroid).rotated(angle));
+		Vec2 screenV = worldToScreen(centeroidPos + (vert - centroid).rotated(angle));
 		SDL_Vertex sdlVert;
 		sdlVert.position = SDL_FPoint{ screenV.x, HEIGHT - screenV.y };
 		sdlVert.color = color;
@@ -520,13 +543,25 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 
 	auto pointInTriangle = [&](int p, int a, int b, int c) {
 		const auto& P = verts[p]; const auto& A = verts[a]; const auto& B = verts[b]; const auto& C = verts[c];
-		return (B - A).cross(P - A) >= 0.f &&
-			(C - B).cross(P - B) >= 0.f &&
-			(A - C).cross(P - C) >= 0.f;
-		};
+		return (B - A).cross(P - A) >= 0.f && (C - B).cross(P - B) >= 0.f && (A - C).cross(P - C) >= 0.f;
+	};
+
+	float signedArea = 0.0f;
+	for (size_t i = 0; i < verts.size(); ++i)
+	{
+		const Vec2& v0 = verts[i];
+		const Vec2& v1 = verts[(i + 1) % verts.size()];
+
+		signedArea += v0.cross(v1);
+	}
+	bool isCCW = signedArea > 0.0f;
 
 	std::vector<int> remaining(verts.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
+	if (!isCCW)
+	{
+		std::reverse(remaining.begin(), remaining.end());
+	}
 
 	indices.clear();
 	indices.reserve((verts.size() - 2) * 3);
@@ -571,9 +606,7 @@ void renderPolygon(const Polygon& polygon, const Vec2& pos, const Vec2& centeroi
 		indices.push_back(remaining[2]);
 	}
 
-	SDL_RenderGeometry(gRenderer, nullptr,
-		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-		indices.data(), static_cast<int>(indices.size()));
+	SDL_RenderGeometry(gRenderer, nullptr, sdlVerts.data(), static_cast<int>(sdlVerts.size()), indices.data(), static_cast<int>(indices.size()));
 }
 
 void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroidPos, float angle, const SDL_FColor& color)
@@ -591,7 +624,7 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 	{
 		float theta = (PI * i) / (hemisphereSegments - 1); // 0 → PI (left to right)
 		Vec2 local = Vec2{ r * std::cos(theta), halfLen + r * std::sin(theta) }.rotated(angle);
-		Vec2 screen = transformToScreenSpace(centroidPos + local);
+		Vec2 screen = worldToScreen(centroidPos + local);
 
 		SDL_Vertex v;
 		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
@@ -605,7 +638,7 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 	{
 		float theta = (PI * i) / (hemisphereSegments - 1); // PI → 0 (right to left)
 		Vec2 local = Vec2{ -r * std::cos(theta), -halfLen - r * std::sin(theta) }.rotated(angle);
-		Vec2 screen = transformToScreenSpace(centroidPos + local);
+		Vec2 screen = worldToScreen(centroidPos + local);
 
 		SDL_Vertex v;
 		v.position = SDL_FPoint{ screen.x, HEIGHT - screen.y };
@@ -631,18 +664,214 @@ void renderCapsule(const Capsule& capsule, const Vec2& pos, const Vec2& centroid
 	indices.push_back(total - 1);
 	indices.push_back(0); // degenerate close — or add a final stitch if needed
 
-	SDL_RenderGeometry(
-		gRenderer,
-		nullptr,
-		sdlVerts.data(), static_cast<int>(sdlVerts.size()),
-		indices.data(), static_cast<int>(indices.size())
-	);
+	SDL_RenderGeometry(gRenderer, nullptr, sdlVerts.data(), static_cast<int>(sdlVerts.size()), indices.data(), static_cast<int>(indices.size()));
 }
 
-Vec2 transformToScreenSpace(Vec2 pos)
+Vec2 worldToScreen(Vec2 pos)
 {
 	Vec2 scale = { (float)world->worldScale().x, (float)world->worldScale().y };
 	return { pos.x * WIDTH / scale.x, pos.y * HEIGHT / scale.y };
+}
+
+Vec2 screenToWorld(Vec2 screenPos)
+{
+	Vec2 scale = { (float)world->worldScale().x, (float)world->worldScale().y };
+	float flippedY = HEIGHT - screenPos.y; // undo the render-time y-flip
+	return { screenPos.x * scale.x / WIDTH, flippedY * scale.y / HEIGHT };
+}
+
+void drawCircleOutline(int cx, int cy, float worldR)
+{
+	Vec2 center = screenToWorld({ (float)cx, (float)(HEIGHT - cy) });
+	const int segments = 48;
+
+	for (int i = 0; i < segments; ++i)
+	{
+		float t0 = TWO_PI * i / segments;
+		float t1 = TWO_PI * (i + 1) / segments;
+
+		Vec2 p0 = worldToScreen(center + Vec2{ worldR * std::cos(t0), worldR * std::sin(t0) });
+		Vec2 p1 = worldToScreen(center + Vec2{ worldR * std::cos(t1), worldR * std::sin(t1) });
+
+		SDL_RenderLine(gRenderer,
+			(int)p0.x, HEIGHT - (int)p0.y,
+			(int)p1.x, HEIGHT - (int)p1.y);
+	}
+}
+
+void drawEllipseOutline(int cx, int cy, float worldRx, float worldRy, float angle)
+{
+	Vec2 center = screenToWorld({ (float)cx, (float)(HEIGHT - cy) });
+	const int segments = 48;
+
+	for (int i = 0; i < segments; ++i)
+	{
+		float t0 = TWO_PI * i / segments;
+		float t1 = TWO_PI * (i + 1) / segments;
+
+		Vec2 p0 = Vec2{ worldRx * std::cos(t0), worldRy * std::sin(t0) }.rotated(angle);
+		Vec2 p1 = Vec2{ worldRx * std::cos(t1), worldRy * std::sin(t1) }.rotated(angle);
+
+		Vec2 s0 = worldToScreen(center + p0);
+		Vec2 s1 = worldToScreen(center + p1);
+
+		SDL_RenderLine(gRenderer, (int)s0.x, HEIGHT - (int)s0.y, (int)s1.x, HEIGHT - (int)s1.y);
+	}
+}
+
+void drawRectOutline(int cx, int cy, float worldW, float worldH, float angle)
+{
+	Vec2 center = screenToWorld({ (float)cx, (float)(HEIGHT - cy) });
+	float hw = worldW * 0.5f;
+	float hh = worldH * 0.5f;
+
+	Vec2 corners[4] = { { -hw, -hh }, {  hw, -hh }, {  hw,  hh }, { -hw,  hh } };
+	for (int i = 0; i < 4; ++i)
+	{
+		Vec2 p0 = worldToScreen(center + corners[i].rotated(angle));
+		Vec2 p1 = worldToScreen(center + corners[(i + 1) % 4].rotated(angle));
+
+		SDL_RenderLine(gRenderer, (int)p0.x, HEIGHT - (int)p0.y, (int)p1.x, HEIGHT - (int)p1.y);
+	}
+}
+
+void drawCapsuleOutline(int cx, int cy, float worldW, float worldH, float worldCapH, float angle)
+{
+	Vec2 center = screenToWorld({ (float)cx, (float)(HEIGHT - cy) });
+	const float rx = worldW * 0.5f;
+	const float ry = worldCapH;
+	const float capCenterOffset = worldH * 0.5f;
+	const int segments = 24;
+
+	auto point = [&](float x, float y)
+	{
+		return worldToScreen(center + Vec2{ x, y }.rotated(angle));
+	};
+
+	for (int i = 0; i < segments; ++i)
+	{
+		float t0 = PI * i / segments;
+		float t1 = PI * (i + 1) / segments;
+
+		Vec2 p0 = point(rx * std::cos(t0), capCenterOffset + ry * std::sin(t0));
+		Vec2 p1 = point(rx * std::cos(t1), capCenterOffset + ry * std::sin(t1));
+
+		SDL_RenderLine(gRenderer, (int)p0.x, HEIGHT - (int)p0.y, (int)p1.x, HEIGHT - (int)p1.y);
+	}
+
+	for (int i = 0; i < segments; ++i)
+	{
+		float t0 = PI * i / segments;
+		float t1 = PI * (i + 1) / segments;
+
+		Vec2 p0 = point(-rx * std::cos(t0), -capCenterOffset - ry * std::sin(t0));
+		Vec2 p1 = point(-rx * std::cos(t1), -capCenterOffset - ry * std::sin(t1));
+
+		SDL_RenderLine(gRenderer, (int)p0.x, HEIGHT - (int)p0.y, (int)p1.x, HEIGHT - (int)p1.y);
+	}
+
+	Vec2 p0 = point(-rx, capCenterOffset);
+	Vec2 p1 = point(-rx, -capCenterOffset);
+	SDL_RenderLine(gRenderer, (int)p0.x, HEIGHT - (int)p0.y, (int)p1.x, HEIGHT - (int)p1.y);
+
+	p0 = point(rx, capCenterOffset);
+	p1 = point(rx, -capCenterOffset);
+	SDL_RenderLine(gRenderer, (int)p0.x, HEIGHT - (int)p0.y, (int)p1.x, HEIGHT - (int)p1.y);
+}
+
+void drawPolyOutline(const Vec2& centroidPos, const std::vector<Vec2>& verts, float angle)
+{
+	if (verts.size() < 2) return;
+
+	Vec2 centroid = Fizziks::getCentroid(verts);
+
+	for (size_t i = 0; i < verts.size(); ++i)
+	{
+		Vec2 local0 = (verts[i] - centroid).rotated(angle);
+		Vec2 local1 = (verts[(i + 1) % verts.size()] - centroid).rotated(angle);
+
+		Vec2 screen0 = worldToScreen(centroidPos + local0);
+		Vec2 screen1 = worldToScreen(centroidPos + local1);
+
+		SDL_RenderLine(gRenderer, (int)screen0.x, HEIGHT - (int)screen0.y, (int)screen1.x, HEIGHT - (int)screen1.y);
+	}
+}
+
+void drawPolygonInProgress(Vec2 mouseWorld)
+{
+	const auto& verts = spawnerConfig.polyVerts;
+
+	for (size_t i = 0; i + 1 < verts.size(); ++i)
+	{
+		Vec2 a = worldToScreen(verts[i]);
+		Vec2 b = worldToScreen(verts[i + 1]);
+		SDL_RenderLine(gRenderer, a.x, HEIGHT - a.y, b.x, HEIGHT - b.y);
+	}
+
+	Vec2 cursor = worldToScreen(mouseWorld);
+	int cx = (int)cursor.x, cy = HEIGHT - (int)cursor.y;
+
+	// crosshair at the cursor so the very first vertex has visual feedback
+	SDL_RenderLine(gRenderer, cx - 6, cy, cx + 6, cy);
+	SDL_RenderLine(gRenderer, cx, cy - 6, cx, cy + 6);
+
+	if (!verts.empty())
+	{
+		Vec2 last = worldToScreen(verts.back());
+		SDL_RenderLine(gRenderer, last.x, HEIGHT - last.y, cx, cy);
+	}
+
+	if (verts.size() >= 3)
+	{
+		SDL_SetRenderDrawColor(gRenderer, 255, 255, 255, 60);
+		Vec2 first = worldToScreen(verts.front());
+		SDL_RenderLine(gRenderer, cx, cy, first.x, HEIGHT - first.y);
+	}
+}
+
+void drawGhost()
+{
+	bool isPolygon = spawnerConfig.shapeType == SpawnerConfig::ShapeType::Polygon;
+	bool isPlacingPolygon = isPolygon && spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex;
+	bool isPlacingPoint = spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePoint;
+
+	if (!isPlacingPolygon && !isPlacingPoint) return;
+
+	float mx, my;
+	SDL_GetMouseState(&mx, &my);
+	Vec2 mouseWorld = screenToWorld({ mx, my });
+	Vec2 screenPos = worldToScreen(mouseWorld);
+	int sx = (int)screenPos.x, sy = (int)screenPos.y;
+
+	SDL_SetRenderDrawColor(gRenderer, 255, 255, 255, 140);
+
+	switch (spawnerConfig.shapeType)
+	{
+	case SpawnerConfig::ShapeType::Circle:
+	{
+		drawCircleOutline(sx, sy, spawnerConfig.circleRadius);
+		break;
+	}
+	case SpawnerConfig::ShapeType::Ellipse:
+		drawEllipseOutline(sx, sy, spawnerConfig.ellipseRx, spawnerConfig.ellipseRy, spawnerConfig.rotation);
+		break;
+	case SpawnerConfig::ShapeType::Rect:
+		drawRectOutline(sx, sy, spawnerConfig.rectWidth, spawnerConfig.rectHeight, spawnerConfig.rotation);
+		break;
+	case SpawnerConfig::ShapeType::Capsule:
+		drawCapsuleOutline(sx, sy, spawnerConfig.capsuleBodyWidth, spawnerConfig.capsuleBodyHeight, spawnerConfig.capsuleCapHeight, spawnerConfig.rotation);
+		break;
+	case SpawnerConfig::ShapeType::Polygon:
+		if (isPlacingPoint)
+		{
+			drawPolyOutline(mouseWorld, spawnerConfig.polyVerts, spawnerConfig.rotation);
+		}
+		else if (isPlacingPolygon)
+		{
+			drawPolygonInProgress(mouseWorld);
+		}
+		break;
+	}
 }
 
 void close()

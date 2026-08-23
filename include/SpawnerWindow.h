@@ -16,10 +16,14 @@
 struct SpawnerConfig
 {
 	enum class ShapeType { Circle, Ellipse, Rect, Polygon, Capsule };
+	enum class PlaceMode { None, PlacePoint, PlacePolygonVertex };
 
 	ShapeType shapeType = ShapeType::Circle;
 	Fizziks::BodyType bodyType = Fizziks::BodyType::DYNAMIC;
 	float position[2] = { 10.0f, 10.0f };
+	float rotation = 0;
+
+	PlaceMode placeMode = PlaceMode::None;
 
 	float circleRadius = 0.2f;
 	float ellipseRx = 0.3f, ellipseRy = 0.2f;
@@ -45,8 +49,8 @@ private:
 
 public:
 	SpawnerWindow(SpawnerConfig& config, bool showWindow = true)
-	: ImGuiWindow("Spawn", showWindow)
-	, config(config) { }
+		: ImGuiWindow("Spawn", showWindow)
+		, config(config) { }
 
 protected:
 	virtual void DrawWindow() override
@@ -67,7 +71,17 @@ protected:
 			config.bodyType = static_cast<Fizziks::BodyType>(bodyTypeIndex);
 		}
 
+		ImGui::InputFloat("Rotation", &config.rotation);
 		ImGui::InputFloat2("Position", config.position);
+		ImGui::SameLine();
+		if (config.placeMode == SpawnerConfig::PlaceMode::PlacePoint)
+		{
+			ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Click in viewport...");
+		}
+		else if (ImGui::Button("Place in Viewport"))
+		{
+			config.placeMode = SpawnerConfig::PlaceMode::PlacePoint;
+		}
 
 		bool canSpawn = true;
 
@@ -94,6 +108,41 @@ protected:
 			break;
 
 		case SpawnerConfig::ShapeType::Polygon:
+			if (config.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex)
+			{
+				ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f),
+					"Click to add vertices, right-click to finish");
+				if (ImGui::Button("Finish"))
+				{
+					config.placeMode = SpawnerConfig::PlaceMode::None;
+
+					if (config.polyVerts.size() >= 3)
+					{
+						Fizziks::Vec2 centroid = Fizziks::Vec2::Zero();
+						for (const auto& v : config.polyVerts)
+						{
+							centroid += v;
+						}
+						centroid /= (float)config.polyVerts.size();
+
+						for (auto& v : config.polyVerts)
+						{
+							v -= centroid;
+						}
+
+						config.position[0] = centroid.x;
+						config.position[1] = centroid.y;
+					}
+				}
+			}
+			else if (ImGui::Button("Place Vertices in Viewport"))
+			{
+				config.polyVerts.clear();
+				config.placeMode = SpawnerConfig::PlaceMode::PlacePolygonVertex;
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Or add manually:");
 			ImGui::InputFloat2("Vertex Pos", config.polyVert);
 
 			if (ImGui::Button("Add Vertex"))
@@ -158,6 +207,7 @@ protected:
 
 			config.def = Fizziks::BodyDefBuilder()
 				.setInitPosition({ config.position[0], config.position[1] })
+				.setInitRotation(config.rotation)
 				.setBodyType(config.bodyType)
 				.setColliderDefs({ Fizziks::ColliderDefBuilder().setShape(shape).setMass(config.mass).build() })
 				.setRestitution(config.restitution)
