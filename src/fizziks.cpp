@@ -593,11 +593,12 @@ void drawShape(Vec2 worldCenter, const std::vector<Vec2>& worldPts, bool filled,
 		if (worldPts.size() < 2) return;
  
 		SDL_SetRenderDrawColor(gRenderer, (Uint8)color.r, (Uint8)color.g, (Uint8)color.b, (Uint8)color.a);
- 
-		for (size_t i = 0; i < worldPts.size(); ++i)
+		
+		size_t n = worldPts.size();
+		for (size_t i = 0; i < n; ++i)
 		{
 			Vec2 a = worldToScreen(worldPts[i]);
-			Vec2 b = worldToScreen(worldPts[(i + 1) % worldPts.size()]);
+			Vec2 b = worldToScreen(worldPts[(i + 1) % n]);
 			SDL_RenderLine(gRenderer, (int)a.x, (int)a.y, (int)b.x, (int)b.y);
 		}
 	}
@@ -671,17 +672,18 @@ void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float an
 	while (remaining.size() > 3)
 	{
 		bool clipped = false;
-		for (size_t i = 0; i < remaining.size(); ++i)
+		size_t n = remaining.size();
+		for (size_t i = 0; i < n; ++i)
 		{
-			int prev = remaining[(i + remaining.size() - 1) % remaining.size()];
+			int prev = remaining[(i + n - 1) % n];
 			int curr = remaining[i];
-			int next = remaining[(i + 1) % remaining.size()];
+			int next = remaining[(i + 1) % n];
  
 			const auto& A = localVerts[prev]; const auto& B = localVerts[curr]; const auto& C = localVerts[next];
 			if ((A - B).cross(C - B) >= 0) continue; // reflex or collinear
  
 			bool isEar = true;
-			for (size_t j = 0; j < remaining.size(); ++j)
+			for (size_t j = 0; j < n; ++j)
 			{
 				int idx = remaining[j];
 				if (idx == prev || idx == curr || idx == next) continue;
