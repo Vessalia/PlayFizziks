@@ -49,6 +49,7 @@ jobs:
           New-Item -ItemType Directory -Path PlayFizziks
 
           Copy-Item build/bin/Release/* PlayFizziks/ -Recurse
+          Copy-Item README.md PlayFizziks/README.md
 
           if (Test-Path assets) {
             Copy-Item assets PlayFizziks/assets -Recurse

@@ -118,7 +118,6 @@ void createBalls()
 			auto ballBuilder = BodyDefBuilder()
 				.setInitPosition({ posX, posY })
 				.setBodyType(BodyType::DYNAMIC)
-				.setGravityScale(1.0f)
 				.setRestitution(0.3f)
 				.setColliderDefs({ ColliderDefBuilder().setShape(createCircle(0.2f)).setMass(0.1f).build() });
 
@@ -328,10 +327,15 @@ int main(int argc, char** argv)
 		skipTime = SDL_GetTicks();
 		for (auto& req : editor->TakeRequests())
 		{
-			bool result = std::visit(RequestHandler{ &world }, req);
-			if (!result)
+			RequestResult result = std::visit(RequestHandler{ &world }, req);
+			if (result == RequestResult::LOAD_FAILURE || result == RequestResult::SAVE_FAILURE || result == RequestResult::SAVE_AS_FAILURE)
 			{
 				printf("The requested operation failed\n");
+			}
+			else if (result == RequestResult::LOAD_SUCCESS)
+			{
+				enviroConfig.paused = true;
+				enviroConfig.dirty = true;
 			}
 		}
 		skipTime = SDL_GetTicks() - skipTime; // this doesn't seem to work...
@@ -362,12 +366,13 @@ void draw()
 		for (const auto& aabb : info)
 		{
 			SDL_FRect rect;
-			Vec2 dim = worldToScreen(aabb.max - aabb.min);
 			Vec2 topLeft = worldToScreen(aabb.min);
-			Vec2 topRight = worldToScreen(aabb.max);
+			Vec2 bottomRight = worldToScreen(aabb.max);
 
-			rect.x = topLeft.x; rect.y = topRight.y;
-			rect.w = dim.x; rect.h = dim.y;
+			rect.x = topLeft.x;
+			rect.y = bottomRight.y;
+			rect.w = bottomRight.x - topLeft.x;
+			rect.h = topLeft.y - bottomRight.y;
 			SDL_RenderRect(gRenderer, &rect);
 		}
 	}
@@ -715,10 +720,12 @@ void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float an
 		indices.data(), static_cast<int>(indices.size()));
 }
 
-void drawPolygonInProgress(Vec2 mouseWorld)
+static int CROSSHAIR_SIZE = 10;
+void drawPolygonInProgress(Vec2 mouseWorld, const SDL_FColor& color)
 {
 	const auto& verts = spawnerConfig.polyVerts;
- 
+
+	SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
 	for (size_t i = 0; i + 1 < verts.size(); ++i)
 	{
 		Vec2 a = worldToScreen(verts[i]);
@@ -728,11 +735,7 @@ void drawPolygonInProgress(Vec2 mouseWorld)
  
 	Vec2 cursor = worldToScreen(mouseWorld);
 	int cx = (int)cursor.x, cy = (int)cursor.y;
- 
-	// crosshair at the cursor so the very first vertex has visual feedback
-	SDL_RenderLine(gRenderer, cx - 6, cy, cx + 6, cy);
-	SDL_RenderLine(gRenderer, cx, cy - 6, cx, cy + 6);
- 
+	
 	if (!verts.empty())
 	{
 		Vec2 last = worldToScreen(verts.back());
@@ -741,10 +744,14 @@ void drawPolygonInProgress(Vec2 mouseWorld)
  
 	if (verts.size() >= 3)
 	{
-		SDL_SetRenderDrawColor(gRenderer, 255, 255, 255, 60);
 		Vec2 first = worldToScreen(verts.front());
 		SDL_RenderLine(gRenderer, cx, cy, first.x, first.y);
 	}
+
+	// crosshair at the cursor so the very first vertex has visual feedback
+	SDL_SetRenderDrawColor(gRenderer, 255, 255, 255, 255);
+	SDL_RenderLine(gRenderer, cx - CROSSHAIR_SIZE, cy, cx + CROSSHAIR_SIZE, cy);
+	SDL_RenderLine(gRenderer, cx, cy - CROSSHAIR_SIZE, cx, cy + CROSSHAIR_SIZE);
 }
  
 void drawGhost()
@@ -782,7 +789,7 @@ void drawGhost()
 		}
 		else if (isPlacingPolygon)
 		{
-			drawPolygonInProgress(mouseWorld);
+			drawPolygonInProgress(mouseWorld, ghostColor);
 		}
 		break;
 	}

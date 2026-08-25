@@ -15,6 +15,3 @@ mkdir build
 cmake -S . -B build
 cmake --build build
 ```
-
-## Demo
-![Demo Gif](demo/PlayFizziks.gif)

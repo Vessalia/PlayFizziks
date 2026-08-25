@@ -12,7 +12,10 @@
 #include "Fizziks/ColliderDef.h"
 #include "Fizziks/Fizziks.h"
 #include "Fizziks/Vec.h"
+#include "Fizziks/Shape.h"
+#include "Fizziks/MathUtils.h"
 
+// need to add things to apply transformations to shapes (namely polygons, hard to make similar looking shapes)
 struct SpawnerConfig
 {
 	enum class ShapeType { Circle, Ellipse, Rect, Polygon, Capsule };
@@ -21,6 +24,7 @@ struct SpawnerConfig
 	ShapeType shapeType = ShapeType::Circle;
 	Fizziks::BodyType bodyType = Fizziks::BodyType::DYNAMIC;
 	float position[2] = { 10.0f, 10.0f };
+	float degrees = 0;
 	float rotation = 0;
 
 	PlaceMode placeMode = PlaceMode::None;
@@ -71,7 +75,12 @@ protected:
 			config.bodyType = static_cast<Fizziks::BodyType>(bodyTypeIndex);
 		}
 
-		ImGui::InputFloat("Rotation", &config.rotation);
+		ImGui::InputFloat("Mass", &config.mass, 0.05f);
+		ImGui::InputFloat("Restitution", &config.restitution, 0.05f);
+		if (ImGui::InputFloat("Rotation (degrees)", &config.degrees))
+		{
+			config.rotation = Fizziks::deg2rad(config.degrees);
+		}
 		ImGui::InputFloat2("Position", config.position);
 		ImGui::SameLine();
 		if (config.placeMode == SpawnerConfig::PlaceMode::PlacePoint)
@@ -170,6 +179,24 @@ protected:
 				ImGui::Text("  [%zu] (%.2f, %.2f)", i, config.polyVerts[i].x, config.polyVerts[i].y);
 			}
 
+			if (ImGui::Button("Horizontal Flip"))
+			{
+				Fizziks::Vec2 centroid = Fizziks::getCentroid(config.polyVerts);
+				for (int i = 0; i < config.polyVerts.size(); ++i)
+				{
+					config.polyVerts[i].x = 2 * centroid.x - config.polyVerts[i].x;
+				}
+			}
+
+			if (ImGui::Button("Vertical Flip"))
+			{
+				Fizziks::Vec2 centroid = Fizziks::getCentroid(config.polyVerts);
+				for (int i = 0; i < config.polyVerts.size(); ++i)
+				{
+					config.polyVerts[i].y = 2 * centroid.y - config.polyVerts[i].y;
+				}
+			}
+
 			canSpawn = config.polyVerts.size() >= 3;
 			if (!canSpawn)
 			{
@@ -177,9 +204,6 @@ protected:
 			}
 			break;
 		}
-
-		ImGui::InputFloat("Mass", &config.mass, 0.05f);
-		ImGui::InputFloat("Restitution", &config.restitution, 0.05f);
 
 		ImGui::BeginDisabled(!canSpawn);
 		if (ImGui::Button("Spawn"))
