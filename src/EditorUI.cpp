@@ -3,6 +3,17 @@
 #include <imgui.h>
 #include <nfd.h>
 
+static std::vector<nfdu8filteritem_t> ToNfdFilters(const std::vector<FileFilter>& filters)
+{
+	std::vector<nfdu8filteritem_t> result;
+	for (const auto& filter : filters)
+	{
+		result.push_back({ filter.name.c_str(), filter.extensions.c_str() });
+	}
+
+	return result;
+}
+
 static void InitImGuiStyles();
 
 void EditorUI::OnImguiRender()
@@ -14,7 +25,7 @@ void EditorUI::OnImguiRender()
 		firstFrame = false;
 	}
 
-	_DrawDockSpace();
+	//_DrawDockSpace();
 	_DrawMainMenuBar();
 
 	for (const auto& window : mWindows)
@@ -23,7 +34,7 @@ void EditorUI::OnImguiRender()
 	}
 
 	//// begin is called in _DrawDockSpace()
-	ImGui::End();
+	//ImGui::End();
 }
 
 void EditorUI::_DrawDockSpace()
@@ -56,6 +67,52 @@ void EditorUI::_DrawDockSpace()
 	ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 }
 
+void EditorUI::Open()
+{
+	auto nfdFilters = ToNfdFilters(config.openFilters);
+
+	nfdopendialogu8args_t args = {0};
+	args.filterList = nfdFilters.data();
+	args.filterCount = static_cast<nfdfiltersize_t>(nfdFilters.size());
+
+	nfdu8char_t* outPath = nullptr;
+	if (NFD_OpenDialogU8_With(&outPath, &args) == NFD_OKAY)
+	{
+		savePath = outPath;
+		_PushRequest(OpenRequest{ savePath });
+		NFD_FreePathU8(outPath);
+	}
+}
+
+void EditorUI::SaveAs()
+{
+	auto nfdFilters = ToNfdFilters(config.saveFilters);
+
+	nfdsavedialogu8args_t args = {0};
+	args.filterList = nfdFilters.data();
+	args.filterCount = static_cast<nfdfiltersize_t>(nfdFilters.size());
+
+	nfdu8char_t* outPath = nullptr;
+	if (NFD_SaveDialogU8_With(&outPath, &args) == NFD_OKAY)
+	{
+		savePath = outPath;
+		_PushRequest(SaveAsRequest{ savePath });
+		NFD_FreePathU8(outPath);
+	}
+}
+
+void EditorUI::Save()
+{
+	if (!savePath.empty())
+	{
+		_PushRequest(SaveRequest{ savePath });
+	}
+	else
+	{
+		SaveAs();
+	}
+}
+
 void EditorUI::_DrawMainMenuBar()
 {
 	ImGui::BeginMainMenuBar();
@@ -64,26 +121,17 @@ void EditorUI::_DrawMainMenuBar()
 		{
 			if (ImGui::MenuItem("Open..."))
 			{
-				nfdu8char_t* outPath;
-				nfdopendialogu8args_t args = {0};
-				args.filterList = &openFilters[0];
-				args.filterCount = openFilters.size();
-				nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
-				if (result == NFD_OKAY)
-				{
-					savePath = outPath;
-					NFD_FreePathU8(outPath);
-				}
+				Open();
 			}
 
 			if (ImGui::MenuItem("Save as..."))
 			{
-				nfdsavedialogu8args_t args = {0};
+				SaveAs();
 			}
 
 			if (ImGui::MenuItem("Save"))
 			{
-
+				Save();
 			}
 
 			ImGui::EndMenu();
@@ -197,4 +245,9 @@ static void InitImGuiStyles()
 	style.GrabRounding = 3;
 	style.LogSliderDeadzone = 4;
 	style.TabRounding = 4;
+}
+
+std::deque<Request> EditorUI::TakeRequests()
+{
+	return std::exchange(requests, {});
 }

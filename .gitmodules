@@ -7,3 +7,6 @@
 [submodule "dependencies/nativefiledialog-extended"]
 	path = dependencies/nativefiledialog-extended
 	url = https://github.com/btzy/nativefiledialog-extended.git
+[submodule "dependencies/json"]
+	path = dependencies/json
+	url = https://github.com/nlohmann/json.git

@@ -8,17 +8,26 @@
 
 #include "Fizziks/Fizzworld.h"
 #include "Fizziks/RigidBody.h"
-#include "Fizziks/BodyDefBuilder.h"
+#include "Fizziks/BodyDef.h"
+#include "Fizziks/ColliderDef.h"
 #include "Fizziks/Fizziks.h"
 #include "Fizziks/Vec.h"
+#include "Fizziks/Shape.h"
+#include "Fizziks/MathUtils.h"
 
+// need to add things to apply transformations to shapes (namely polygons, hard to make similar looking shapes)
 struct SpawnerConfig
 {
 	enum class ShapeType { Circle, Ellipse, Rect, Polygon, Capsule };
+	enum class PlaceMode { None, PlacePoint, PlacePolygonVertex };
 
 	ShapeType shapeType = ShapeType::Circle;
 	Fizziks::BodyType bodyType = Fizziks::BodyType::DYNAMIC;
-	float pos[2] = { 10.0f, 10.0f };
+	float position[2] = { 10.0f, 10.0f };
+	float degrees = 0;
+	float rotation = 0;
+
+	PlaceMode placeMode = PlaceMode::None;
 
 	float circleRadius = 0.2f;
 	float ellipseRx = 0.3f, ellipseRy = 0.2f;
@@ -31,36 +40,25 @@ struct SpawnerConfig
 
 	float mass = 1;
 	float restitution = 0.3f;
+
+	Fizziks::BodyDef def;
+
+	bool dirty = false;
 };
 
 class SpawnerWindow : public ImGuiWindow
 {
 private:
-
-	Fizziks::FizzWorld* world;
-	std::vector<Fizziks::RigidBody> bodies;
-
 	SpawnerConfig& config;
 
 public:
-	SpawnerWindow(Fizziks::FizzWorld* world, SpawnerConfig& config, bool showWindow = true)
-	: ImGuiWindow("Spawn", showWindow)
-	, world(world)
-	, config(config) { }
+	SpawnerWindow(SpawnerConfig& config, bool showWindow = true)
+		: ImGuiWindow("Spawn", showWindow)
+		, config(config) { }
 
 protected:
 	virtual void DrawWindow() override
 	{
-		if (ImGui::Button("Clear Scene"))
-		{
-			for (auto& body : bodies)
-			{
-				world->destroyBody(body);
-			}
-
-			bodies.clear();
-		}
-
 		ImGui::BeginChild("Create a RigidBody");
 
 		const char* shapeNames[] = { "Circle", "Ellipse", "Rect", "Polygon", "Capsule" };
@@ -77,7 +75,22 @@ protected:
 			config.bodyType = static_cast<Fizziks::BodyType>(bodyTypeIndex);
 		}
 
-		ImGui::InputFloat2("Position", config.pos);
+		ImGui::InputFloat("Mass", &config.mass, 0.05f);
+		ImGui::InputFloat("Restitution", &config.restitution, 0.05f);
+		if (ImGui::InputFloat("Rotation (degrees)", &config.degrees))
+		{
+			config.rotation = Fizziks::deg2rad(config.degrees);
+		}
+		ImGui::InputFloat2("Position", config.position);
+		ImGui::SameLine();
+		if (config.placeMode == SpawnerConfig::PlaceMode::PlacePoint)
+		{
+			ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Click in viewport...");
+		}
+		else if (ImGui::Button("Place in Viewport"))
+		{
+			config.placeMode = SpawnerConfig::PlaceMode::PlacePoint;
+		}
 
 		bool canSpawn = true;
 
@@ -104,6 +117,41 @@ protected:
 			break;
 
 		case SpawnerConfig::ShapeType::Polygon:
+			if (config.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex)
+			{
+				ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f),
+					"Click to add vertices, right-click to finish");
+				if (ImGui::Button("Finish"))
+				{
+					config.placeMode = SpawnerConfig::PlaceMode::None;
+
+					if (config.polyVerts.size() >= 3)
+					{
+						Fizziks::Vec2 centroid = Fizziks::Vec2::Zero();
+						for (const auto& v : config.polyVerts)
+						{
+							centroid += v;
+						}
+						centroid /= (float)config.polyVerts.size();
+
+						for (auto& v : config.polyVerts)
+						{
+							v -= centroid;
+						}
+
+						config.position[0] = centroid.x;
+						config.position[1] = centroid.y;
+					}
+				}
+			}
+			else if (ImGui::Button("Place Vertices in Viewport"))
+			{
+				config.polyVerts.clear();
+				config.placeMode = SpawnerConfig::PlaceMode::PlacePolygonVertex;
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Or add manually:");
 			ImGui::InputFloat2("Vertex Pos", config.polyVert);
 
 			if (ImGui::Button("Add Vertex"))
@@ -131,6 +179,24 @@ protected:
 				ImGui::Text("  [%zu] (%.2f, %.2f)", i, config.polyVerts[i].x, config.polyVerts[i].y);
 			}
 
+			if (ImGui::Button("Horizontal Flip"))
+			{
+				Fizziks::Vec2 centroid = Fizziks::getCentroid(config.polyVerts);
+				for (int i = 0; i < config.polyVerts.size(); ++i)
+				{
+					config.polyVerts[i].x = 2 * centroid.x - config.polyVerts[i].x;
+				}
+			}
+
+			if (ImGui::Button("Vertical Flip"))
+			{
+				Fizziks::Vec2 centroid = Fizziks::getCentroid(config.polyVerts);
+				for (int i = 0; i < config.polyVerts.size(); ++i)
+				{
+					config.polyVerts[i].y = 2 * centroid.y - config.polyVerts[i].y;
+				}
+			}
+
 			canSpawn = config.polyVerts.size() >= 3;
 			if (!canSpawn)
 			{
@@ -138,9 +204,6 @@ protected:
 			}
 			break;
 		}
-
-		ImGui::InputFloat("Mass", &config.mass, 0.05f);
-		ImGui::InputFloat("Restitution", &config.restitution, 0.05f);
 
 		ImGui::BeginDisabled(!canSpawn);
 		if (ImGui::Button("Spawn"))
@@ -166,14 +229,15 @@ protected:
 				break;
 			}
 
-			Fizziks::BodyDef def = Fizziks::BodyDefBuilder()
-				.setInitPosition({ config.pos[0], config.pos[1] })
+			config.def = Fizziks::BodyDefBuilder()
+				.setInitPosition({ config.position[0], config.position[1] })
+				.setInitRotation(config.rotation)
 				.setBodyType(config.bodyType)
-				.setColliderDefs({ Fizziks::createColliderDef(shape, config.mass) })
+				.setColliderDefs({ Fizziks::ColliderDefBuilder().setShape(shape).setMass(config.mass).build() })
 				.setRestitution(config.restitution)
 				.build();
 
-			bodies.push_back(world->createBody(def));
+			config.dirty = true;
 		}
 		ImGui::EndDisabled();
 

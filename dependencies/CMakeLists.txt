@@ -5,9 +5,12 @@ set(SDL_TESTS  OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
 
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(Fizziks EXCLUDE_FROM_ALL)
 add_subdirectory(nativefiledialog-extended EXCLUDE_FROM_ALL)
+add_subdirectory(json EXCLUDE_FROM_ALL)
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 
