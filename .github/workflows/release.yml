@@ -31,9 +31,14 @@ jobs:
             -Uri $url `
             -OutFile Fizziks.zip
 
+          Remove-Item `
+            -Recurse -Force dependencies/Fizziks `
+            -ErrorAction SilentlyContinue
+
           Expand-Archive `
             -Path Fizziks.zip `
-            -DestinationPath dependencies
+            -DestinationPath dependencies `
+            -Force
 
           Remove-Item Fizziks.zip
 
