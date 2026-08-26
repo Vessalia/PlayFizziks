@@ -1,8 +1,11 @@
 #include "EditorUI.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <nfd.h>
 
+namespace ngin
+{
 static std::vector<nfdu8filteritem_t> ToNfdFilters(const std::vector<FileFilter>& filters)
 {
 	std::vector<nfdu8filteritem_t> result;
@@ -22,6 +25,7 @@ void EditorUI::OnImguiRender()
 	if (firstFrame)
 	{
 		InitImGuiStyles();
+		_ApplyPendingDockGroups();
 		firstFrame = false;
 	}
 
@@ -35,6 +39,32 @@ void EditorUI::OnImguiRender()
 
 	//// begin is called in _DrawDockSpace()
 	//ImGui::End();
+}
+
+void EditorUI::_ApplyPendingDockGroups()
+{
+	for (size_t i = 0; i < mPendingDockGroups.size(); ++i)
+	{
+		const auto& group = mPendingDockGroups[i];
+		if (group.names.empty()) continue;
+
+		ImGuiID dockId = ImGui::GetID(("DockGroup" + std::to_string(i)).c_str());
+
+		const auto& settings = group.settings;
+		ImGui::DockBuilderRemoveNode(dockId);
+		ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_None);
+		ImGui::DockBuilderSetNodeSize(dockId, { settings.dim[0], settings.dim[0] });
+		ImGui::DockBuilderSetNodePos(dockId, { settings.pos[0], settings.pos[1] });
+
+		for (const auto& name : group.names)
+		{
+			ImGui::DockBuilderDockWindow(name.c_str(), dockId);
+		}
+
+		ImGui::DockBuilderFinish(dockId);
+	}
+
+	mPendingDockGroups.clear();
 }
 
 void EditorUI::_DrawDockSpace()
@@ -74,6 +104,7 @@ void EditorUI::Open()
 	nfdopendialogu8args_t args = {0};
 	args.filterList = nfdFilters.data();
 	args.filterCount = static_cast<nfdfiltersize_t>(nfdFilters.size());
+	args.defaultPath = config.defaultPath.c_str();
 
 	nfdu8char_t* outPath = nullptr;
 	if (NFD_OpenDialogU8_With(&outPath, &args) == NFD_OKAY)
@@ -91,6 +122,7 @@ void EditorUI::SaveAs()
 	nfdsavedialogu8args_t args = {0};
 	args.filterList = nfdFilters.data();
 	args.filterCount = static_cast<nfdfiltersize_t>(nfdFilters.size());
+	args.defaultPath = config.defaultPath.c_str();
 
 	nfdu8char_t* outPath = nullptr;
 	if (NFD_SaveDialogU8_With(&outPath, &args) == NFD_OKAY)
@@ -250,4 +282,5 @@ static void InitImGuiStyles()
 std::deque<Request> EditorUI::TakeRequests()
 {
 	return std::exchange(requests, {});
+}
 }

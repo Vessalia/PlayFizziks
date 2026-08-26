@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+namespace ngin
+{
 ImGuiWindow::ImGuiWindow(const std::string& name, bool showWindow)
 	:	mName(name)
 	,	mShowWindow(showWindow)
@@ -50,4 +52,5 @@ bool ImGuiWindow::IsShowing() const
 const std::string& ImGuiWindow::GetName() const
 {
 	return mName;
+}
 }

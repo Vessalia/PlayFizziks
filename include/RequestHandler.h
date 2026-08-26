@@ -5,6 +5,8 @@
 
 #include "Fizziks/FizzWorld.h"
 
+namespace ngin
+{
 enum class RequestResult
 {
 	LOAD_SUCCESS, LOAD_FAILURE,
@@ -43,3 +45,4 @@ struct RequestHandler
 		return result ? RequestResult::SAVE_AS_SUCCESS : RequestResult::SAVE_AS_FAILURE;
 	}
 };
+}

@@ -15,7 +15,8 @@
 #include "Fizziks/Shape.h"
 #include "Fizziks/MathUtils.h"
 
-// need to add things to apply transformations to shapes (namely polygons, hard to make similar looking shapes)
+namespace ngin
+{
 struct SpawnerConfig
 {
 	enum class ShapeType { Circle, Ellipse, Rect, Polygon, Capsule };
@@ -244,3 +245,4 @@ protected:
 		ImGui::EndChild();
 	}
 };
+}

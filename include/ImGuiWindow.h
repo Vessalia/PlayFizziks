@@ -3,6 +3,8 @@
 #include <string>
 #include "Fizziks/Vec.h"
 
+namespace ngin
+{
 class ImGuiWindow
 {
 private:
@@ -37,3 +39,4 @@ public:
 
 	const std::string& GetName() const;
 };
+}

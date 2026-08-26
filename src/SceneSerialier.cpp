@@ -7,6 +7,8 @@
 #include <fstream>
 #include <variant>
 
+namespace ngin
+{
 bool SceneSerializer::Save(const Fizziks::FizzWorld* world, const std::string& path)
 {
 	std::ofstream out(path);
@@ -208,4 +210,5 @@ bool SceneSerializer::Load(Fizziks::FizzWorld* world, const std::string& path)
 	}
 
 	return true;
+}
 }

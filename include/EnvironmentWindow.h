@@ -8,6 +8,8 @@
 
 using namespace Fizziks;
 
+namespace ngin
+{
 struct EnvironmentConfig
 {
 	bool clear = false;
@@ -81,3 +83,4 @@ protected:
 		}
 	}
 };
+}

@@ -2,6 +2,7 @@
 #include <chrono>
 #include <vector>
 #include <numeric>
+#include <filesystem>
 
 #include "nfd.h"
 
@@ -28,6 +29,7 @@
 #include "Fizziks/ColliderDef.h"
 
 using namespace Fizziks;
+using namespace ngin;
 
 const unsigned int SCREEN_WIDTH  = 720;
 const unsigned int SCREEN_HEIGHT = 720;
@@ -132,6 +134,23 @@ void createScene()
 	createBalls();
 }
 
+std::filesystem::path findProjectRoot(const std::string& targetName)
+{
+	std::filesystem::path current = std::filesystem::current_path();
+
+	while (true)
+	{
+		if (current.filename() == targetName) return current;
+
+		std::filesystem::path parent = current.parent_path();
+		if (parent == current)
+		{
+			throw std::runtime_error("Could not find \"" + targetName + "\" directory in any parent path");
+		}
+		current = parent;
+	}
+}
+
 bool initSDL()
 {
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
@@ -193,12 +212,11 @@ bool initImGui()
 	editor = std::make_unique<EditorUI>();
 	editor->config.openFilters = { FileFilter{"Load a Scene", "fizz"} };
 	editor->config.saveFilters = { FileFilter{"Save a Scene", "fizz"} };
+	editor->config.defaultPath = (findProjectRoot("PlayFizziks") / "assets").string();
 
-	std::unique_ptr<SpawnerWindow> spawner = std::make_unique<SpawnerWindow>(spawnerConfig);
-	editor->AddEditorWindow(std::move(spawner));
-
-	std::unique_ptr<EnvironmentWindow> enviro = std::make_unique<EnvironmentWindow>(enviroConfig);
-	editor->AddEditorWindow(std::move(enviro));
+	editor->AddDockedWindows({ .pos = { 0, 0 }, .dim = { 100, 100 } },
+		std::make_unique<EnvironmentWindow>(enviroConfig),
+		std::make_unique<SpawnerWindow>(spawnerConfig));
 
 	return true;
 }
