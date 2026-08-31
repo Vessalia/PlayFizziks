@@ -33,7 +33,8 @@ jobs:
 
           Expand-Archive `
             -Path Fizziks.zip `
-            -DestinationPath dependencies
+            -DestinationPath dependencies `
+            -Force
 
           Remove-Item Fizziks.zip
 
