@@ -61,7 +61,7 @@ std::vector<Vec2> rectVertexGenerator(Vec2 center, float width, float height, fl
 std::vector<Vec2> capsuleVertexGenerator(Vec2 center, float bodyWidth, float bodyHeight, float capHeight, float angle, int capSegments = 24);
 std::vector<Vec2> polygonVertexGenerator(Vec2 center, const std::vector<Vec2>& localVerts, float angle);
 
-std::vector<SDL_Vertex> buildScreenVerts(const std::vector<Vec2>& worldPts, const SDL_FColor& color);
+std::vector<SDL_Vertex> worldToSDLVertices(const std::vector<Vec2>& worldPts, const SDL_FColor& color);
 
 void drawBody(const RigidBody& rb);
 void drawShape(Vec2 worldCenter, const std::vector<Vec2>& worldPts, bool filled, const SDL_FColor& color);
@@ -72,7 +72,7 @@ void drawCapsule(Vec2 worldCenter, float bodyWidth, float bodyHeight, float capH
 void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float angle, bool filled, const SDL_FColor& color);
 
 void drawGhost();
-void drawPolygonInProgress(Vec2 mouseWorld);
+void drawPolygonInProgress(Vec2 posWorld);
 
 void createStage()
 {
@@ -356,7 +356,7 @@ int main(int argc, char** argv)
 				enviroConfig.dirty = true;
 			}
 		}
-		skipTime = SDL_GetTicks() - skipTime; // this doesn't seem to work...
+		skipTime = SDL_GetTicks() - skipTime; // this doesn't seem to work...?
 
 		handleConfigs();
 	}
@@ -420,7 +420,7 @@ Vec2 screenToWorld(Vec2 screenPos)
 
 void drawBody(const RigidBody& body)
 {
-	SDL_FColor color = SDL_FColor{ 1, 1, 1, SDL_ALPHA_OPAQUE };
+	SDL_FColor color = SDL_FColor{ 0, 0, 0, SDL_ALPHA_OPAQUE };
 	if (body.bodyType() == BodyType::STATIC)
 	{
 		color = { 160 / 255.f, 150 / 255.f, 30 / 255.f, SDL_ALPHA_OPAQUE };
@@ -478,8 +478,9 @@ std::vector<Vec2> circleVertexGenerator(Vec2 center, float radius, int segments)
 	pts.reserve(segments);
 	for (int i = 0; i < segments; ++i)
 	{
-		float t = Fizziks::TWO_PI * i / segments;
-		pts.push_back(center + Vec2{ radius * std::cos(t), radius * std::sin(t) });
+		float segmentAngle = Fizziks::TWO_PI * i / segments;
+		Vec2 segment = radius * Vec2::FromAngle(segmentAngle);
+		pts.push_back(center + segment);
 	}
 
 	return pts;
@@ -491,9 +492,9 @@ std::vector<Vec2> ellipseVertexGenerator(Vec2 center, float rx, float ry, float 
 	pts.reserve(segments);
 	for (int i = 0; i < segments; ++i)
 	{
-		float t = Fizziks::TWO_PI * i / segments;
-		Vec2 local = Vec2{ rx * std::cos(t), ry * std::sin(t) }.rotated(angle);
-		pts.push_back(center + local);
+		float segmentAngle = Fizziks::TWO_PI * i / segments;
+		Vec2 segment = Mat2::Scale(rx, ry) * Vec2::FromAngle(segmentAngle);
+		pts.push_back(center + segment.rotated(angle));
 	}
 
 	return pts;
@@ -562,7 +563,7 @@ std::vector<Vec2> polygonVertexGenerator(Vec2 center, const std::vector<Vec2>& l
 static std::vector<SDL_Vertex> sdlVerts;
 static std::vector<int> indices;
  
-std::vector<SDL_Vertex> buildScreenVerts(const std::vector<Vec2>& worldPts, const SDL_FColor& color)
+std::vector<SDL_Vertex> worldToSDLVertices(const std::vector<Vec2>& worldPts, const SDL_FColor& color)
 {
 	std::vector<SDL_Vertex> verts;
 	verts.reserve(worldPts.size());
@@ -588,12 +589,11 @@ void drawShape(Vec2 worldCenter, const std::vector<Vec2>& worldPts, bool filled,
 		SDL_Vertex centerVert;
 		centerVert.position = SDL_FPoint{ centerScreen.x, centerScreen.y };
 		centerVert.color = color;
-		centerVert.tex_coord = SDL_FPoint{ 0, 0 };
  
 		sdlVerts.clear();
 		sdlVerts.reserve(worldPts.size() + 1);
 		sdlVerts.push_back(centerVert);
-		auto rim = buildScreenVerts(worldPts, color);
+		auto rim = worldToSDLVertices(worldPts, color);
 		sdlVerts.insert(sdlVerts.end(), rim.begin(), rim.end());
  
 		size_t n = worldPts.size();
@@ -601,7 +601,7 @@ void drawShape(Vec2 worldCenter, const std::vector<Vec2>& worldPts, bool filled,
 		indices.reserve(n * 3);
 		for (size_t i = 1; i <= n; ++i)
 		{
-			indices.push_back(0);
+			indices.push_back(0); // fan around from the center
 			indices.push_back((int)i);
 			indices.push_back((int)(i % n + 1));
 		}
@@ -667,9 +667,10 @@ void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float an
 	}
 
 	// Ear-clipping is rotation-invariant, so just use the original vertices
-	sdlVerts = buildScreenVerts(worldPts, color);
+	sdlVerts = worldToSDLVertices(worldPts, color);
  
-	auto pointInTriangle = [&](int p, int a, int b, int c) {
+	auto pointInTriangle = [&](int p, int a, int b, int c)
+	{
 		const auto& P = localVerts[p]; const auto& A = localVerts[a]; const auto& B = localVerts[b]; const auto& C = localVerts[c];
 		return (B - A).cross(P - A) >= 0.f && (C - B).cross(P - B) >= 0.f && (A - C).cross(P - C) >= 0.f;
 	};
@@ -689,6 +690,7 @@ void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float an
 	}
  
 	indices.clear();
+	// 3 vertices per ear, first 3 vertices are one ear then each extra vertex afterwards is another ear
 	indices.reserve((localVerts.size() - 2) * 3);
  
 	while (remaining.size() > 3)
@@ -738,7 +740,7 @@ void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float an
 }
 
 static int CROSSHAIR_SIZE = 10;
-void drawPolygonInProgress(Vec2 mouseWorld, const SDL_FColor& color)
+void drawPolygonInProgress(Vec2 posWorld, const SDL_FColor& color)
 {
 	const auto& verts = spawnerConfig.polyVerts;
 
@@ -750,25 +752,24 @@ void drawPolygonInProgress(Vec2 mouseWorld, const SDL_FColor& color)
 		SDL_RenderLine(gRenderer, a.x, a.y, b.x, b.y);
 	}
  
-	Vec2 cursor = worldToScreen(mouseWorld);
-	int cx = (int)cursor.x, cy = (int)cursor.y;
+	Vec2 pos = worldToScreen(posWorld);
 	
 	if (!verts.empty())
 	{
 		Vec2 last = worldToScreen(verts.back());
-		SDL_RenderLine(gRenderer, last.x, last.y, cx, cy);
+		SDL_RenderLine(gRenderer, last.x, last.y, pos.x, pos.y);
 	}
  
 	if (verts.size() >= 3)
 	{
 		Vec2 first = worldToScreen(verts.front());
-		SDL_RenderLine(gRenderer, cx, cy, first.x, first.y);
+		SDL_RenderLine(gRenderer, pos.x, pos.y, first.x, first.y);
 	}
 
 	// crosshair at the cursor so the very first vertex has visual feedback
 	SDL_SetRenderDrawColor(gRenderer, 255, 255, 255, 255);
-	SDL_RenderLine(gRenderer, cx - CROSSHAIR_SIZE, cy, cx + CROSSHAIR_SIZE, cy);
-	SDL_RenderLine(gRenderer, cx, cy - CROSSHAIR_SIZE, cx, cy + CROSSHAIR_SIZE);
+	SDL_RenderLine(gRenderer, pos.x - CROSSHAIR_SIZE, pos.y, pos.x + CROSSHAIR_SIZE, pos.y);
+	SDL_RenderLine(gRenderer, pos.x, pos.y - CROSSHAIR_SIZE, pos.x, pos.y + CROSSHAIR_SIZE);
 }
  
 void drawGhost()
@@ -777,7 +778,7 @@ void drawGhost()
 	bool isPlacingPolygon = isPolygon && spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePolygonVertex;
 	bool isPlacingPoint = spawnerConfig.placeMode == SpawnerConfig::PlaceMode::PlacePoint;
  
-	if (!isPlacingPolygon && !isPlacingPoint) return;
+	if (spawnerConfig.placeMode == SpawnerConfig::PlaceMode::None) return;
  
 	float mx, my;
 	SDL_GetMouseState(&mx, &my);

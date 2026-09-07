@@ -25,9 +25,9 @@ void EditorUI::OnImguiRender()
 	if (firstFrame)
 	{
 		InitImGuiStyles();
-		_ApplyPendingDockGroups();
 		firstFrame = false;
 	}
+	_ApplyPendingDockGroups();
 
 	//_DrawDockSpace();
 	_DrawMainMenuBar();

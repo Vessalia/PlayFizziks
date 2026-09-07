@@ -72,7 +72,7 @@ public:
 
 	template<typename... Windows>
 	void AddDockedWindows(DockConfig config, std::unique_ptr<Windows>... windows) {
-		static_assert((std::is_base_of_v<ImGuiWindow, Windows> && ...), "All windows must derive from EditorWindow");
+		static_assert((std::is_base_of_v<ImGuiWindow, Windows> && ...), "All windows must derive from ngin::ImGuiWindow");
 
 		std::vector<std::string> names = { windows->GetName()... };
 		(AddEditorWindow(std::move(windows)), ...);
