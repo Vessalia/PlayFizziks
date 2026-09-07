@@ -55,11 +55,11 @@ void close();
 Vec2 worldToScreen(Vec2 worldPos);
 Vec2 screenToWorld(Vec2 screenPos);
 
-std::vector<Vec2> circleGenerator(Vec2 center, float radius, int segments = 48);
-std::vector<Vec2> ellipseGenerator(Vec2 center, float rx, float ry, float angle, int segments = 48);
-std::vector<Vec2> rectGenerator(Vec2 center, float width, float height, float angle);
-std::vector<Vec2> capsuleGenerator(Vec2 center, float bodyWidth, float bodyHeight, float capHeight, float angle, int capSegments = 24);
-std::vector<Vec2> polygonGenerator(Vec2 center, const std::vector<Vec2>& localVerts, float angle);
+std::vector<Vec2> circleVertexGenerator(Vec2 center, float radius, int segments = 48);
+std::vector<Vec2> ellipseVertexGenerator(Vec2 center, float rx, float ry, float angle, int segments = 48);
+std::vector<Vec2> rectVertexGenerator(Vec2 center, float width, float height, float angle);
+std::vector<Vec2> capsuleVertexGenerator(Vec2 center, float bodyWidth, float bodyHeight, float capHeight, float angle, int capSegments = 24);
+std::vector<Vec2> polygonVertexGenerator(Vec2 center, const std::vector<Vec2>& localVerts, float angle);
 
 std::vector<SDL_Vertex> buildScreenVerts(const std::vector<Vec2>& worldPts, const SDL_FColor& color);
 
@@ -472,7 +472,7 @@ void drawBody(const RigidBody& body)
 	}
 }
 
-std::vector<Vec2> circleGenerator(Vec2 center, float radius, int segments)
+std::vector<Vec2> circleVertexGenerator(Vec2 center, float radius, int segments)
 {
 	std::vector<Vec2> pts;
 	pts.reserve(segments);
@@ -485,7 +485,7 @@ std::vector<Vec2> circleGenerator(Vec2 center, float radius, int segments)
 	return pts;
 }
 
-std::vector<Vec2> ellipseGenerator(Vec2 center, float rx, float ry, float angle, int segments)
+std::vector<Vec2> ellipseVertexGenerator(Vec2 center, float rx, float ry, float angle, int segments)
 {
 	std::vector<Vec2> pts;
 	pts.reserve(segments);
@@ -499,7 +499,7 @@ std::vector<Vec2> ellipseGenerator(Vec2 center, float rx, float ry, float angle,
 	return pts;
 }
 
-std::vector<Vec2> rectGenerator(Vec2 center, float width, float height, float angle)
+std::vector<Vec2> rectVertexGenerator(Vec2 center, float width, float height, float angle)
 {
 	float hw = width * 0.5f;
 	float hh = height * 0.5f;
@@ -515,7 +515,7 @@ std::vector<Vec2> rectGenerator(Vec2 center, float width, float height, float an
 	return pts;
 }
 
-std::vector<Vec2> capsuleGenerator(Vec2 center, float bodyWidth, float bodyHeight, float capHeight, float angle, int capSegments)
+std::vector<Vec2> capsuleVertexGenerator(Vec2 center, float bodyWidth, float bodyHeight, float capHeight, float angle, int capSegments)
 {
 	const float rx = bodyWidth * 0.5f;
 	const float ry = capHeight;
@@ -544,7 +544,7 @@ std::vector<Vec2> capsuleGenerator(Vec2 center, float bodyWidth, float bodyHeigh
 	return pts;
 }
 
-std::vector<Vec2> polygonGenerator(Vec2 center, const std::vector<Vec2>& localVerts, float angle)
+std::vector<Vec2> polygonVertexGenerator(Vec2 center, const std::vector<Vec2>& localVerts, float angle)
 {
 	Vec2 centroid = Fizziks::getCentroid(localVerts);
 
@@ -572,7 +572,6 @@ std::vector<SDL_Vertex> buildScreenVerts(const std::vector<Vec2>& worldPts, cons
 		SDL_Vertex v;
 		v.position = SDL_FPoint{ s.x, s.y };
 		v.color = color;
-		v.tex_coord = SDL_FPoint{ 0, 0 };
 		verts.push_back(v);
 	}
 
@@ -629,7 +628,7 @@ void drawShape(Vec2 worldCenter, const std::vector<Vec2>& worldPts, bool filled,
 
 void drawCircle(Vec2 worldCenter, float radius, float angle, bool filled, const SDL_FColor& color)
 {
-	drawShape(worldCenter, circleGenerator(worldCenter, radius), filled, color);
+	drawShape(worldCenter, circleVertexGenerator(worldCenter, radius), filled, color);
  
 	if (filled)
 	{
@@ -644,22 +643,22 @@ void drawCircle(Vec2 worldCenter, float radius, float angle, bool filled, const 
  
 void drawEllipse(Vec2 worldCenter, float rx, float ry, float angle, bool filled, const SDL_FColor& color)
 {
-	drawShape(worldCenter, ellipseGenerator(worldCenter, rx, ry, angle), filled, color);
+	drawShape(worldCenter, ellipseVertexGenerator(worldCenter, rx, ry, angle), filled, color);
 }
  
 void drawRect(Vec2 worldCenter, float width, float height, float angle, bool filled, const SDL_FColor& color)
 {
-	drawShape(worldCenter, rectGenerator(worldCenter, width, height, angle), filled, color);
+	drawShape(worldCenter, rectVertexGenerator(worldCenter, width, height, angle), filled, color);
 }
  
 void drawCapsule(Vec2 worldCenter, float bodyWidth, float bodyHeight, float capHeight, float angle, bool filled, const SDL_FColor& color)
 {
-	drawShape(worldCenter, capsuleGenerator(worldCenter, bodyWidth, bodyHeight, capHeight, angle), filled, color);
+	drawShape(worldCenter, capsuleVertexGenerator(worldCenter, bodyWidth, bodyHeight, capHeight, angle), filled, color);
 }
 
 void drawPolygon(Vec2 worldCenter, const std::vector<Vec2>& localVerts, float angle, bool filled, const SDL_FColor& color)
 {
-	std::vector<Vec2> worldPts = polygonGenerator(worldCenter, localVerts, angle);
+	std::vector<Vec2> worldPts = polygonVertexGenerator(worldCenter, localVerts, angle);
  
 	if (!filled)
 	{
