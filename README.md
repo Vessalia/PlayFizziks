@@ -1,6 +1,8 @@
 # PlayFizziks
 Demo of the [Fizziks](https://github.com/Vessalia/Fizziks) physics engine.
 
+To play with the engine just download whatever release you want and just double click PlayFizziks.exe!
+
 ## Usage
 - A basic UI using [imgui](https://github.com/ocornut/imgui) exposes the ability to change some basic settings on the world, as well as spawning and clearing rigid-bodies. This includes all 5 basic shape types, along with a polygon builder for complex shapes.
 - Scene saving and loading is made available via platform agnostic [file dialog](https://github.com/btzy/nativefiledialog-extended), and [json serialization](https://github.com/nlohmann/json).
